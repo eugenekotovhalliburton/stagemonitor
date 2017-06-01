@@ -9,10 +9,10 @@ import com.codahale.metrics.graphite.GraphiteReporter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.stagemonitor.configuration.ConfigurationOption;
-import org.stagemonitor.configuration.ConfigurationRegistry;
-import org.stagemonitor.configuration.converter.ListValueConverter;
-import org.stagemonitor.configuration.converter.SetValueConverter;
+import org.stagemonitor.core.configuration.Configuration;
+import org.stagemonitor.core.configuration.ConfigurationOption;
+import org.stagemonitor.core.configuration.converter.ListValueConverter;
+import org.stagemonitor.core.configuration.converter.SetValueConverter;
 import org.stagemonitor.core.elasticsearch.ElasticsearchClient;
 import org.stagemonitor.core.elasticsearch.IndexSelector;
 import org.stagemonitor.core.grafana.GrafanaClient;
@@ -29,8 +29,8 @@ import org.stagemonitor.core.metrics.metrics2.MetricName;
 import org.stagemonitor.core.metrics.metrics2.MetricNameValueConverter;
 import org.stagemonitor.core.metrics.metrics2.ScheduledMetrics2Reporter;
 import org.stagemonitor.core.util.HttpClient;
-import org.stagemonitor.util.IOUtils;
-import org.stagemonitor.util.StringUtils;
+import org.stagemonitor.core.util.IOUtils;
+import org.stagemonitor.core.util.StringUtils;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -258,7 +258,7 @@ public class CorePlugin extends StagemonitorPlugin {
 			.key("stagemonitor.elasticsearch.url")
 			.dynamic(true)
 			.label("Elasticsearch URL")
-			.description("A comma separated list of the Elasticsearch URLs that store spans and metrics. " +
+			.description("A comma separated list of the Elasticsearch URLs that store the request traces and metrics. " +
 					"If your ES cluster is secured with basic authentication, you can use urls like https://user:password@example.com.")
 			.defaultValue(Collections.<String>emptyList())
 			.configurationCategory(CORE_PLUGIN_NAME)
@@ -314,7 +314,7 @@ public class CorePlugin extends StagemonitorPlugin {
 			.build();
 	private final ConfigurationOption<Collection<String>> excludePackages = ConfigurationOption.stringsOption()
 			.key("stagemonitor.instrument.exclude")
-			.dynamic(false)
+			.dynamic(true)
 			.label("Excluded packages")
 			.description("Exclude packages and their sub-packages from the instrumentation (for example the profiler).")
 			.defaultValue(Collections.<String>emptySet())
@@ -322,7 +322,7 @@ public class CorePlugin extends StagemonitorPlugin {
 			.build();
 	private final ConfigurationOption<Collection<String>> excludeContaining = ConfigurationOption.stringsOption()
 			.key("stagemonitor.instrument.excludeContaining")
-			.dynamic(false)
+			.dynamic(true)
 			.label("Exclude containing")
 			.description("Exclude classes from the instrumentation (for example from profiling) that contain one of the " +
 					"following strings as part of their class name.")
@@ -337,11 +337,10 @@ public class CorePlugin extends StagemonitorPlugin {
 			.build();
 	private final ConfigurationOption<Collection<String>> includePackages = ConfigurationOption.stringsOption()
 			.key("stagemonitor.instrument.include")
-			.dynamic(false)
+			.dynamic(true)
 			.label("Included packages")
-			.description("The packages that should be included for instrumentation. " +
-					"If this property is required if you want to use the profiler, the @MonitorRequests annotation, the " +
-					"com.codahale.metrics.annotation.* annotations or similar features. " +
+			.description("The packages that should be included for instrumentation (for example the profiler). " +
+					"If this property is empty, all packages (except for the excluded ones) are instrumented. " +
 					"You can exclude subpackages of a included package via `stagemonitor.instrument.exclude`.")
 			.defaultValue(Collections.<String>emptySet())
 			.configurationCategory(CORE_PLUGIN_NAME)
@@ -408,7 +407,7 @@ public class CorePlugin extends StagemonitorPlugin {
 			.dynamic(false)
 			.label("Thread Pool Queue Capacity Limit")
 			.description("Sets a limit to the number of pending tasks in the ExecutorServices stagemonitor uses. " +
-					"These are thread pools that are used for example to report spans to elasticsearch. " +
+					"These are thread pools that are used for example to report request traces to elasticsearch. " +
 					"If elasticsearch is unreachable or your application encounters a spike in incoming requests this limit could be reached. " +
 					"It is used to prevent the queue from growing indefinitely. ")
 			.defaultValue(1000)
@@ -425,13 +424,25 @@ public class CorePlugin extends StagemonitorPlugin {
 			.configurationCategory(CORE_PLUGIN_NAME)
 			.tags(METRICS_STORE, ELASTICSEARCH)
 			.build();
+	private final ConfigurationOption<Boolean> initAsync = ConfigurationOption.booleanOption()
+			.key("stagemonitor.init.async")
+			.dynamic(false)
+			.label("Async initialize stagemonitor")
+			.description("When set to true, stagemonitor initializes asynchronously which improves the startup time of the application. " +
+					"In case when `stagemonitor.instanceName` is not set explicitly but should be read from the first " +
+					"request, setting this to true improves the performance of the first request.\n" +
+					"WARNING: On JBoss this might lead to deadlocks on startup. See https://github.com/stagemonitor/stagemonitor/issues/179 for more details.")
+			.defaultValue(false)
+			.configurationCategory(CORE_PLUGIN_NAME)
+			.tags("performance")
+			.build();
 	private final ConfigurationOption<Integer> elasticsearchAvailabilityCheckPeriodSec = ConfigurationOption.integerOption()
 			.key("stagemonitor.elasticsearch.availabilityCheckPeriodSec")
 			.dynamic(false)
 			.label("Elasticsearch availability check period (sec)")
 			.description("When set to a value > 0 stagemonitor periodically checks if Elasticsearch is available. " +
-					"When not available, stagemonitor won't try send documents to Elasticsearch which would " +
-					"fail anyway. This reduces heap usage as the documents won't be queued up. " +
+					"When not available, stagemonitor won't try to send request traces to Elasticsearch which would " +
+					"fail anyway. This reduces heap usage as the request traces won't be queued up. " +
 					"It also avoids the logging of warnings when the queue is filled up to the limit (see '" + POOLS_QUEUE_CAPACITY_LIMIT_KEY + "')")
 			.defaultValue(5)
 			.configurationCategory(CORE_PLUGIN_NAME)
@@ -483,7 +494,7 @@ public class CorePlugin extends StagemonitorPlugin {
 		registerReporters(initArguments.getMetricRegistry(), initArguments.getConfiguration(), initArguments.getMeasurementSession());
 	}
 
-	void registerReporters(Metric2Registry metric2Registry, ConfigurationRegistry configuration, MeasurementSession measurementSession) {
+	void registerReporters(Metric2Registry metric2Registry, Configuration configuration, MeasurementSession measurementSession) {
 		Metric2Filter regexFilter = Metric2Filter.ALL;
 		Collection<MetricName> excludedMetricsPatterns = getExcludedMetricsPatterns();
 		if (!excludedMetricsPatterns.isEmpty()) {
@@ -550,7 +561,7 @@ public class CorePlugin extends StagemonitorPlugin {
 	private void reportToElasticsearch(Metric2Registry metricRegistry, int reportingInterval,
 									   final MeasurementSession measurementSession) {
 		if (isReportToElasticsearch()) {
-			elasticsearchClient.sendClassPathRessourceBulkAsync("stagemonitor-metrics-kibana-index-pattern.bulk");
+			elasticsearchClient.sendClassPathRessourceBulkAsync("KibanaConfig.bulk");
 			logger.info("Sending metrics to Elasticsearch ({}) every {}s", getElasticsearchUrls(), reportingInterval);
 			final String mappingJson = ElasticsearchClient.modifyIndexTemplate(
 					metricsIndexTemplate.getValue(), moveToColdNodesAfterDays.getValue(), getNumberOfReplicas(), getNumberOfShards());
@@ -821,6 +832,10 @@ public class CorePlugin extends StagemonitorPlugin {
 
 	public Collection<String> getExportClassesWithName() {
 		return exportClassesWithName.getValue();
+	}
+
+	public boolean isInitAsync() {
+		return initAsync.getValue();
 	}
 
 	public Integer getNumberOfReplicas() {

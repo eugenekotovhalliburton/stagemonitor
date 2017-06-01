@@ -1,24 +1,22 @@
 package org.stagemonitor.core.metrics.annotations;
 
-import com.codahale.metrics.annotation.Gauge;
+import static net.bytebuddy.matcher.ElementMatchers.isAnnotatedWith;
+import static net.bytebuddy.matcher.ElementMatchers.isConstructor;
+import static org.stagemonitor.core.metrics.metrics2.MetricName.name;
 
+import java.lang.reflect.Method;
+
+import com.codahale.metrics.annotation.Gauge;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.stagemonitor.core.Stagemonitor;
 import org.stagemonitor.core.instrument.StagemonitorByteBuddyTransformer;
 import org.stagemonitor.core.metrics.MonitorGauges;
 import org.stagemonitor.core.metrics.aspects.SignatureUtils;
-
-import java.lang.reflect.Method;
-
-import static net.bytebuddy.matcher.ElementMatchers.isAnnotatedWith;
-import static net.bytebuddy.matcher.ElementMatchers.isConstructor;
-import static org.stagemonitor.core.metrics.metrics2.MetricName.name;
 
 /**
  * Implementation for the {@link Gauge} annotation
@@ -33,7 +31,7 @@ public class GaugeTransformer extends StagemonitorByteBuddyTransformer {
 	}
 
 	@Override
-	protected ElementMatcher.Junction<MethodDescription> getMethodElementMatcher() {
+	protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getMethodElementMatcher() {
 		return isConstructor();
 	}
 

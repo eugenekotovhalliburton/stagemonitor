@@ -7,10 +7,12 @@ import net.bytebuddy.dynamic.scaffold.MethodGraph;
 import net.bytebuddy.dynamic.scaffold.TypeValidation;
 import net.bytebuddy.matcher.ElementMatcher;
 
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.stagemonitor.core.CorePlugin;
 import org.stagemonitor.core.Stagemonitor;
+import org.stagemonitor.core.instrument.ExternalTransformersLoader;
 import org.stagemonitor.core.util.ClassUtils;
 import org.stagemonitor.util.IOUtils;
 
@@ -52,7 +54,7 @@ public class AgentAttacher {
 		public void run() {
 		}
 	};
-
+	
 	private static CorePlugin corePlugin = Stagemonitor.getPlugin(CorePlugin.class);
 	private static boolean runtimeAttached = false;
 	private static Set<String> hashCodesOfClassLoadersToIgnore = Collections.emptySet();
@@ -217,6 +219,16 @@ public class AgentAttacher {
 				}
 			} else if (corePlugin.isDebugInstrumentation()) {
 				logger.info("Excluding {}", transformer.getClass().getSimpleName());
+			}
+		}
+		for (StagemonitorByteBuddyTransformer transformer : ExternalTransformersLoader.getAdditionalTransformers()) {
+			if (transformer.isActive() && !isExcluded(transformer)) {
+				transformers.add(transformer);
+				if (corePlugin.isDebugInstrumentation()) {
+					logger.info("Registering additional {}", transformer.getClass().getSimpleName());
+				}
+			} else if (corePlugin.isDebugInstrumentation()) {
+				logger.info("Excluding additional {}", transformer.getClass().getSimpleName());
 			}
 		}
 		Collections.sort(transformers, new Comparator<StagemonitorByteBuddyTransformer>() {

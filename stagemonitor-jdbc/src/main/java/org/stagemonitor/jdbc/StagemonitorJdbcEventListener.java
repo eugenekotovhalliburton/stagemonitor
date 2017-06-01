@@ -1,21 +1,22 @@
 package org.stagemonitor.jdbc;
 
 import com.p6spy.engine.common.ConnectionInformation;
+import com.p6spy.engine.common.ResultSetInformation;
 import com.p6spy.engine.common.StatementInformation;
 import com.p6spy.engine.event.SimpleJdbcEventListener;
-import com.uber.jaeger.context.TracingUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.stagemonitor.configuration.ConfigurationRegistry;
 import org.stagemonitor.core.CorePlugin;
 import org.stagemonitor.core.Stagemonitor;
+import org.stagemonitor.core.configuration.Configuration;
 import org.stagemonitor.core.metrics.metrics2.Metric2Registry;
 import org.stagemonitor.core.metrics.metrics2.MetricName;
-import org.stagemonitor.tracing.AbstractExternalRequest;
-import org.stagemonitor.tracing.TracingPlugin;
-import org.stagemonitor.tracing.profiler.Profiler;
-import org.stagemonitor.util.StringUtils;
+import org.stagemonitor.core.util.StringUtils;
+import org.stagemonitor.requestmonitor.ExternalRequest;
+import org.stagemonitor.requestmonitor.RequestMonitor;
+import org.stagemonitor.requestmonitor.RequestMonitorPlugin;
+import org.stagemonitor.requestmonitor.RequestTrace;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -26,44 +27,40 @@ import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
 
-import io.opentracing.Span;
-import io.opentracing.tag.Tags;
-
 import static org.stagemonitor.core.metrics.metrics2.MetricName.name;
 
 public class StagemonitorJdbcEventListener extends SimpleJdbcEventListener {
 
 	private static final Logger logger = LoggerFactory.getLogger(StagemonitorJdbcEventListener.class);
-	private static final String DB_STATEMENT = "db.statement";
 
 	private final JdbcPlugin jdbcPlugin;
 
+	private final RequestMonitor requestMonitor;
+
 	private final MetricName.MetricNameTemplate getConnectionTemplate = name("get_jdbc_connection").templateFor("url");
 
-	private final ConcurrentMap<DataSource, MetaData> dataSourceUrlMap = new ConcurrentHashMap<DataSource, MetaData>();
+	private final ConcurrentMap<DataSource, String> dataSourceUrlMap = new ConcurrentHashMap<DataSource, String>();
 
 	private CorePlugin corePlugin;
-	private TracingPlugin tracingPlugin;
 
 	public StagemonitorJdbcEventListener() {
 		this(Stagemonitor.getConfiguration());
 	}
 
-	public StagemonitorJdbcEventListener(ConfigurationRegistry configuration) {
+	public StagemonitorJdbcEventListener(Configuration configuration) {
 		this.jdbcPlugin = configuration.getConfig(JdbcPlugin.class);
-		tracingPlugin = configuration.getConfig(TracingPlugin.class);
+		requestMonitor = configuration.getConfig(RequestMonitorPlugin.class).getRequestMonitor();
 		corePlugin = configuration.getConfig(CorePlugin.class);
 	}
 
 	@Override
 	public void onConnectionWrapped(ConnectionInformation connectionInformation) {
 		final Metric2Registry metricRegistry = corePlugin.getMetricRegistry();
-		// at the moment stagemonitor only supports monitoring connections initiated via a DataSource
-		if (connectionInformation.getDataSource() instanceof DataSource && corePlugin.isInitialized()) {
+		if (connectionInformation.getDataSource() instanceof DataSource && metricRegistry != null) {
 			DataSource dataSource = (DataSource) connectionInformation.getDataSource();
 			ensureUrlExistsForDataSource(dataSource, connectionInformation.getConnection());
-			MetaData metaData = dataSourceUrlMap.get(dataSource);
-			metricRegistry.timer(getConnectionTemplate.build(metaData.serviceName)).update(connectionInformation.getTimeToGetConnectionNs(), TimeUnit.NANOSECONDS);
+			String url = dataSourceUrlMap.get(dataSource);
+			metricRegistry.timer(getConnectionTemplate.build(url)).update(connectionInformation.getTimeToGetConnectionNs(), TimeUnit.NANOSECONDS);
 		}
 	}
 
@@ -72,8 +69,7 @@ public class StagemonitorJdbcEventListener extends SimpleJdbcEventListener {
 			final DatabaseMetaData metaData;
 			try {
 				metaData = connection.getMetaData();
-				final MetaData meta = new MetaData(metaData.getUserName(), metaData.getURL(), metaData.getDatabaseProductName());
-				dataSourceUrlMap.put(dataSource, meta);
+				dataSourceUrlMap.put(dataSource, metaData.getUserName() + '@' + metaData.getURL());
 			} catch (SQLException e) {
 				logger.warn(e.getMessage(), e);
 			}
@@ -81,43 +77,45 @@ public class StagemonitorJdbcEventListener extends SimpleJdbcEventListener {
 		return dataSource;
 	}
 
-	private static class MetaData {
-		private final String serviceName;
-		private final String userName;
-		private final String productName;
-
-		private MetaData(String userName, String url, String productName) {
-			this.userName = userName;
-			this.productName = productName;
-			serviceName = userName + "@" + url;
-		}
-
-	}
-
-	@Override
-	public void onBeforeAnyExecute(StatementInformation statementInformation) {
-		tracingPlugin.getRequestMonitor().monitorStart(new MonitoredJdbcRequest(tracingPlugin));
-	}
-
 	@Override
 	public void onAfterAnyExecute(StatementInformation statementInformation, long timeElapsedNanos, SQLException e) {
-		if (!TracingUtils.getTraceContext().isEmpty()) {
-			final Span span = TracingUtils.getTraceContext().getCurrentSpan();
-			if (statementInformation.getConnectionInformation().getDataSource() instanceof DataSource && jdbcPlugin.isCollectSql()) {
-				MetaData metaData = dataSourceUrlMap.get(statementInformation.getConnectionInformation().getDataSource());
-				Tags.PEER_SERVICE.set(span, metaData.serviceName);
-				span.setTag("db.type", metaData.productName);
-				span.setTag("db.user", metaData.userName);
+		final RequestTrace requestTrace = RequestMonitor.get().getRequestTrace();
+		if (requestTrace != null && jdbcPlugin.isCollectSql()) {
+			createExternalRequest(statementInformation, requestTrace, timeElapsedNanos, statementInformation.getSql(), statementInformation.getSqlWithValues());
+		}
+	}
 
-				if (StringUtils.isNotEmpty(statementInformation.getSql())) {
-					String sql = getSql(statementInformation.getSql(), statementInformation.getSqlWithValues());
-					Profiler.addIOCall(sql, timeElapsedNanos);
-					span.setTag(AbstractExternalRequest.EXTERNAL_REQUEST_METHOD, sql.substring(0, sql.indexOf(' ')).toUpperCase());
-					span.setTag(DB_STATEMENT, sql);
-				}
+	private String getExternalRequestAttribute(int connectionId) {
+		return "jdbc" + connectionId;
+	}
 
+	@Override
+	public void onAfterResultSetNext(ResultSetInformation resultSetInformation, long timeElapsedNanos, boolean hasNext, SQLException e) {
+		updateExternalRequest(resultSetInformation.getConnectionId(), timeElapsedNanos);
+	}
+
+	@Override
+	public void onAfterCommit(ConnectionInformation connectionInformation, long timeElapsedNanos, SQLException e) {
+		updateExternalRequest(connectionInformation.getConnectionId(), timeElapsedNanos);
+	}
+
+	private void createExternalRequest(StatementInformation statementInformation, RequestTrace requestTrace, long elapsed, String prepared, String sql) {
+		if (StringUtils.isNotEmpty(prepared)) {
+			sql = getSql(prepared, sql);
+			String method = sql.substring(0, sql.indexOf(' ')).toUpperCase();
+			final ExternalRequest jdbcRequest = new ExternalRequest("jdbc", method, elapsed, sql);
+			requestMonitor.trackExternalRequest(jdbcRequest);
+			requestTrace.addRequestAttribute(getExternalRequestAttribute(statementInformation.getConnectionId()), jdbcRequest);
+		}
+	}
+
+	private void updateExternalRequest(int connectionId, long elapsed) {
+		final RequestTrace requestTrace = RequestMonitor.get().getRequestTrace();
+		if (requestTrace != null) {
+			ExternalRequest externalRequest = (ExternalRequest) requestTrace.getRequestAttribute(getExternalRequestAttribute(connectionId));
+			if (externalRequest != null) {
+				requestTrace.addTimeToExternalRequest(externalRequest, elapsed);
 			}
-			tracingPlugin.getRequestMonitor().monitorStop();
 		}
 	}
 
@@ -126,18 +124,5 @@ public class StagemonitorJdbcEventListener extends SimpleJdbcEventListener {
 			sql = prepared;
 		}
 		return sql.trim();
-	}
-
-	private static class MonitoredJdbcRequest extends AbstractExternalRequest {
-
-		private MonitoredJdbcRequest(TracingPlugin tracingPlugin) {
-			super(tracingPlugin.getTracer());
-		}
-
-		@Override
-		protected String getType() {
-			return "jdbc";
-		}
-
 	}
 }

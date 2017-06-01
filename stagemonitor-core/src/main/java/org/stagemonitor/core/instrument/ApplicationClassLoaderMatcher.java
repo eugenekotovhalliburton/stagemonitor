@@ -1,8 +1,8 @@
 package org.stagemonitor.core.instrument;
 
 import net.bytebuddy.matcher.ElementMatcher;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import org.slf4j.Logger;import org.slf4j.LoggerFactory;;
 import org.stagemonitor.core.CorePlugin;
 import org.stagemonitor.core.Stagemonitor;
 import org.stagemonitor.core.util.ClassUtils;

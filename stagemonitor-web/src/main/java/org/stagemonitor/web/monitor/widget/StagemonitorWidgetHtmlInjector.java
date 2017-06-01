@@ -1,18 +1,21 @@
 package org.stagemonitor.web.monitor.widget;
 
-import org.stagemonitor.configuration.ConfigurationRegistry;
-import org.stagemonitor.core.Stagemonitor;
-import org.stagemonitor.core.util.JsonUtils;
-import org.stagemonitor.tracing.reporter.ReadbackSpan;
-import org.stagemonitor.tracing.utils.SpanUtils;
-import org.stagemonitor.util.IOUtils;
-import org.stagemonitor.web.WebPlugin;
-import org.stagemonitor.web.monitor.filter.HtmlInjector;
-
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.stagemonitor.core.Stagemonitor;
+import org.stagemonitor.core.configuration.Configuration;
+import org.stagemonitor.core.util.IOUtils;
+import org.stagemonitor.core.util.JsonUtils;
+import org.stagemonitor.web.WebPlugin;
+import org.stagemonitor.web.monitor.HttpRequestTrace;
+import org.stagemonitor.web.monitor.filter.HtmlInjector;
+
 public class StagemonitorWidgetHtmlInjector extends HtmlInjector {
+
+	private final Logger logger = LoggerFactory.getLogger(getClass());
 
 	/**
 	 * Whether the in browser widget should be opened automatically
@@ -20,7 +23,7 @@ public class StagemonitorWidgetHtmlInjector extends HtmlInjector {
 	 */
 	private final boolean openImmediately;
 	private WebPlugin webPlugin;
-	private ConfigurationRegistry configuration;
+	private Configuration configuration;
 	private String widgetTemplate;
 	private String contextPath;
 
@@ -54,9 +57,9 @@ public class StagemonitorWidgetHtmlInjector extends HtmlInjector {
 
 	@Override
 	public void injectHtml(HtmlInjector.InjectArguments injectArguments) {
-		ReadbackSpan span = null;
-		if (injectArguments.getSpanContext() != null) {
-			span = injectArguments.getSpanContext().getReadbackSpan();
+		HttpRequestTrace requestTrace = null;
+		if (injectArguments.getRequestInformation() != null) {
+			requestTrace = injectArguments.getRequestInformation().getRequestTrace();
 		}
 		final List<String> pathsOfWidgetTabPlugins = new ArrayList<String>();
 		for (String path : Stagemonitor.getPathsOfWidgetTabPlugins()) {
@@ -69,7 +72,7 @@ public class StagemonitorWidgetHtmlInjector extends HtmlInjector {
 		}
 
 		injectArguments.setContentToInjectBeforeClosingBody(widgetTemplate
-				.replace("@@JSON_REQUEST_TACE_PLACEHOLDER@@", span != null ? JsonUtils.toJson(span, SpanUtils.CALL_TREE_ASCII) : "null")
+				.replace("@@JSON_REQUEST_TACE_PLACEHOLDER@@", requestTrace != null ? requestTrace.toJson() : "null")
 				.replace("@@CONFIGURATION_OPTIONS@@", JsonUtils.toJson(configuration.getConfigurationOptionsByCategory()))
 				.replace("@@CONFIGURATION_PWD_SET@@", Boolean.toString(configuration.isPasswordSet()))
 				.replace("@@CONFIGURATION_SOURCES@@", JsonUtils.toJson(configuration.getNamesOfConfigurationSources()))
