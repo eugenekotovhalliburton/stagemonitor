@@ -17,7 +17,7 @@ public class MonitoredMethodRequest extends MonitoredRequest {
 	public static final String OP_TYPE_METHOD_INVOCATION = "method_invocation";
 	private final String methodSignature;
 	private final MethodExecution methodExecution;
-	private final Map<String, String> safeParameters;
+	private final Map<String, Object> parameters;
 	private final TracingPlugin tracingPlugin;
 
 	public MonitoredMethodRequest(ConfigurationRegistry configuration, String methodSignature, MethodExecution methodExecution) {
@@ -28,7 +28,7 @@ public class MonitoredMethodRequest extends MonitoredRequest {
 		this.tracingPlugin = configuration.getConfig(TracingPlugin.class);
 		this.methodSignature = methodSignature;
 		this.methodExecution = methodExecution;
-		this.safeParameters = getSafeParameterMap(parameters);
+		this.parameters = parameters;
 	}
 
 	private Map<String, String> getSafeParameterMap(Map<String, Object> parameters) {
@@ -63,7 +63,8 @@ public class MonitoredMethodRequest extends MonitoredRequest {
 					.withTag(Tags.SPAN_KIND.getKey(), Tags.SPAN_KIND_SERVER)
 					.start();
 		}
-		SpanUtils.setParameters(span, safeParameters);
+		SpanUtils.setParameters(span, getSafeParameterMap(parameters));
+		SpanUtils.setCustomProperties(span, methodSignature, parameters);
 		span.setTag(SpanUtils.OPERATION_TYPE, OP_TYPE_METHOD_INVOCATION);
 		return span;
 	}

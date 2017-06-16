@@ -1,5 +1,7 @@
 package org.stagemonitor.tracing.utils;
 
+import org.stagemonitor.tracing.CustomProperty;
+import org.stagemonitor.tracing.CustomPropertyCreatorLoader;
 import org.stagemonitor.util.StringUtils;
 
 import java.io.PrintWriter;
@@ -9,7 +11,9 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import io.opentracing.Span;
 import io.opentracing.tag.Tags;
@@ -58,6 +62,19 @@ public class SpanUtils {
 		}
 		for (Map.Entry<String, String> entry : parameters.entrySet()) {
 			span.setTag(PARAMETERS_PREFIX + StringUtils.deDot(entry.getKey()), entry.getValue());
+		}
+	}
+	
+	public static void setCustomProperties(Span span, String signature, Map<String, Object> parameters) {
+		if(parameters == null){
+			return;
+		}
+		Map<String, String> properties = new LinkedHashMap<String, String>();
+		for (CustomProperty property : CustomPropertyCreatorLoader.getCustomProperties()){
+			properties.putAll(property.getProperties(signature, parameters));
+		}		
+		for (Entry<String, String> entry : properties.entrySet()){
+			span.setTag(entry.getKey(), entry.getValue());
 		}
 	}
 

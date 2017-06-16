@@ -219,6 +219,16 @@ public class AgentAttacher {
 				logger.info("Excluding {}", transformer.getClass().getSimpleName());
 			}
 		}
+		for (StagemonitorByteBuddyTransformer transformer : ExternalTransformerCreatorLoader.getAdditionalTransformers()) {
+			if (transformer.isActive() && !isExcluded(transformer)) {
+				transformers.add(transformer);
+				if (corePlugin.isDebugInstrumentation()) {
+					logger.info("Registering additional {}", transformer.getClass().getSimpleName());
+				}
+			} else if (corePlugin.isDebugInstrumentation()) {
+				logger.info("Excluding additional {}", transformer.getClass().getSimpleName());
+			}
+		}
 		Collections.sort(transformers, new Comparator<StagemonitorByteBuddyTransformer>() {
 			@Override
 			public int compare(StagemonitorByteBuddyTransformer o1, StagemonitorByteBuddyTransformer o2) {

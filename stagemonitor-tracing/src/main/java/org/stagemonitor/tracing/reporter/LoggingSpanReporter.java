@@ -34,6 +34,8 @@ public class LoggingSpanReporter extends SpanReporter {
 		appendLine(sb, "traceId", readbackSpan.getTraceId());
 		appendLine(sb, "spanId", readbackSpan.getId());
 		appendLine(sb, "parentId", readbackSpan.getParentId());
+		appendLine(sb, "os", readbackSpan.getOS());
+		appendLine(sb, "user", readbackSpan.getUser());
 		sb.append("###########################\n");
 		sb.append("# Tags                    #\n");
 		sb.append("###########################\n");
