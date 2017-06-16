@@ -27,6 +27,9 @@ public class ReadbackSpan {
 	static {
 		JsonUtils.getMapper().registerModule(new SpanJsonModule());
 	}
+	
+	private final static String os = System.getProperty("os.name");
+	private final static String user = System.getProperty("user.name");
 
 	private String id;
 	private String traceId;
@@ -37,6 +40,14 @@ public class ReadbackSpan {
 	private String timestamp;
 
 	private Map<String, Object> tags = new HashMap<String, Object>();
+	
+	public String getOS() {
+		return os;
+	}
+	
+	public String getUser(){
+		return user;
+	}
 
 	public String getId() {
 		return id;
@@ -140,6 +151,8 @@ public class ReadbackSpan {
 					gen.writeStringField("id", span.getId());
 					gen.writeStringField("trace_id", span.getTraceId());
 					gen.writeStringField("parent_id", span.getParentId());
+					gen.writeStringField("os", span.getOS());
+					gen.writeStringField("user", span.getUser());
 					gen.writeEndObject();
 				}
 			})));
