@@ -23,6 +23,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -40,6 +41,8 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.xml.bind.DatatypeConverter;
 
 public class ElasticsearchClient {
 
@@ -71,7 +74,17 @@ public class ElasticsearchClient {
 	}
 
 	public JsonNode getJson(final String path) throws IOException {
-		return JsonUtils.getMapper().readTree(new URL(corePlugin.getElasticsearchUrl() + path).openStream());
+		String urlText = corePlugin.getElasticsearchUrl()+ path;
+		URL url = new URL(urlText);
+		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+		String basicAuth;
+		if (url.getUserInfo() != null) {
+			basicAuth = "Basic " + DatatypeConverter.printBase64Binary(url.getUserInfo().getBytes());
+		} else {
+			basicAuth = "Basic " + DatatypeConverter.printBase64Binary(new String("stagemonitor:ae14f#Y!").getBytes());
+		}
+		connection.setRequestProperty("Authorization", basicAuth);
+		return JsonUtils.getMapper().readTree( connection.getInputStream());
 	}
 
 	public <T> T getObject(final String path, Class<T> type) {

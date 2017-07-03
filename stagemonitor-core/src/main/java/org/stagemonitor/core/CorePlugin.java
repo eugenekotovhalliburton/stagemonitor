@@ -660,10 +660,18 @@ public class CorePlugin extends StagemonitorPlugin {
 	 */
 	public String getElasticsearchUrl() {
 		final List<String> urls = elasticsearchUrls.getValue();
+//		System.out.println("***** ES url *****");
+//		StringBuilder sb = new StringBuilder("Length " + urls.size() + ": ");
+//		for(int i = 0; i < urls.size(); ++i){
+//			sb.append(urls.get(i)).append("; ");
+//		}
+//		System.out.println(sb.toString());
 		if (urls.isEmpty()) {
 			return null;
 		}
 		final int index = accessesToElasticsearchUrl.getAndIncrement() % urls.size();
+//		System.out.println("returned -> " + urls.get(index));
+//		System.out.println("----- ES url -----");
 		return StringUtils.removeTrailingSlash(urls.get(index));
 	}
 

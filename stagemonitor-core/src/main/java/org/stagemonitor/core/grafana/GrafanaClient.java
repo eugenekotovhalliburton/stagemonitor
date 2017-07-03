@@ -50,11 +50,13 @@ public class GrafanaClient {
 		Map<String, Object> dataSource = new HashMap<String, Object>();
 		dataSource.put("name", ES_STAGEMONITOR_DS_NAME);
 		dataSource.put("url", url);
-		dataSource.put("access", "proxy");
+		dataSource.put("access", "direct");
 		dataSource.put("database", "[stagemonitor-metrics-]YYYY.MM.DD");
 		dataSource.put("isDefault", false);
 		dataSource.put("type", "elasticsearch");
-		dataSource.put("basicAuth", false);
+		dataSource.put("basicAuth", true);
+		dataSource.put("user", "grafana");
+		dataSource.put("password", "grafanapassword");
 		Map<String, Object> jsonData = new HashMap<String, Object>();
 		jsonData.put("timeField", "@timestamp");
 		jsonData.put("interval", "Daily");

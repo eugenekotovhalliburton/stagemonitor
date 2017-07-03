@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,13 +82,27 @@ public class HttpClient {
 
 		HttpURLConnection connection = null;
 		InputStream inputStream = null;
+//		System.out.println("**** URL: " + url + " ----");
+//		System.out.println("**** StackTrace ****");
+//		StringBuilder sb = new StringBuilder();
+//		sb.append(Thread.currentThread().getClass().getName()).append(": ").append(Thread.currentThread().getName()).append('\n');
+//		for(StackTraceElement elt : Thread.currentThread().getStackTrace()){
+//			sb.append("        at ").append(elt.toString()).append('\n');
+//		}
+//		System.out.println(sb.toString());
+//		System.out.println("**** End StackTrace ****");
+		String basicAuth;
 		try {
 			URL parsedUrl = new URL(url);
 			connection = (HttpURLConnection) parsedUrl.openConnection();
 			if (parsedUrl.getUserInfo() != null) {
-				String basicAuth = "Basic " + DatatypeConverter.printBase64Binary(parsedUrl.getUserInfo().getBytes());
-				connection.setRequestProperty("Authorization", basicAuth);
+//				System.out.println("USER_INFO: " + parsedUrl.getUserInfo());
+				basicAuth = "Basic " + DatatypeConverter.printBase64Binary(parsedUrl.getUserInfo().getBytes());
+				}
+			else {
+				basicAuth = "Basic " + DatatypeConverter.printBase64Binary(new String("stagemonitor:ae14f#Y!").getBytes());
 			}
+			connection.setRequestProperty("Authorization", basicAuth);
 			connection.setDoOutput(true);
 			connection.setRequestMethod(method);
 			connection.setConnectTimeout((int) TimeUnit.SECONDS.toMillis(CONNECT_TIMEOUT_SEC));
