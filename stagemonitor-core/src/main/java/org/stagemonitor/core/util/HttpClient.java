@@ -9,9 +9,12 @@ import org.stagemonitor.util.IOUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.Authenticator;
 import java.net.HttpURLConnection;
+import java.net.Proxy;
+import java.net.ProxySelector;
+import java.net.URI;
 import java.net.URL;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +30,9 @@ public class HttpClient {
 	private static final long CONNECT_TIMEOUT_SEC = 5;
 	private static final long READ_TIMEOUT_SEC = 15;
 	private final Logger logger = LoggerFactory.getLogger(getClass());
+	
+	private Proxy proxy;
+	private boolean proxyLoaded;
 
 	public int send(final String method, final String url) {
 		return send(method, url, null, null);
@@ -82,19 +88,13 @@ public class HttpClient {
 
 		HttpURLConnection connection = null;
 		InputStream inputStream = null;
-//		System.out.println("**** URL: " + url + " ----");
-//		System.out.println("**** StackTrace ****");
-//		StringBuilder sb = new StringBuilder();
-//		sb.append(Thread.currentThread().getClass().getName()).append(": ").append(Thread.currentThread().getName()).append('\n');
-//		for(StackTraceElement elt : Thread.currentThread().getStackTrace()){
-//			sb.append("        at ").append(elt.toString()).append('\n');
-//		}
-//		System.out.println(sb.toString());
-//		System.out.println("**** End StackTrace ****");
 		String basicAuth;
 		try {
 			URL parsedUrl = new URL(url);
-			connection = (HttpURLConnection) parsedUrl.openConnection();
+			//set the default authenticator to null to avoid pop up for authentication
+			Authenticator.setDefault(null);
+			//get the default system proxy if one exists
+			connection = (HttpURLConnection) parsedUrl.openConnection(getProxy(url));
 			if (parsedUrl.getUserInfo() != null) {
 //				System.out.println("USER_INFO: " + parsedUrl.getUserInfo());
 				basicAuth = "Basic " + DatatypeConverter.printBase64Binary(parsedUrl.getUserInfo().getBytes());
@@ -143,6 +143,27 @@ public class HttpClient {
 			IOUtils.closeQuietly(inputStream);
 		}
 	}
+	
+	private Proxy getProxy(String url) {
+		if(!proxyLoaded && proxy == null) { //initially
+			try {
+	            System.setProperty("java.net.useSystemProxies","true");
+	            List<Proxy> prxies = ProxySelector.getDefault().select(
+	                        new URI(url));
+				// as per the java doc of ProxySelector.select() method, the
+				// list will contain one element even if there are no proxies.
+				// So the list will never be empty. we can directly get the
+				// first element
+	            proxy = prxies.get(0); //get the first one
+	        } catch (Exception e) {
+	            logger.error("Could not detect the system proxy. " + e.getMessage(), e);
+	            proxy = Proxy.NO_PROXY;
+	        }
+			proxyLoaded = true;
+		}
+		return proxy;
+	}
+
 
 	private Integer getResponseCodeIfPossible(HttpURLConnection connection) {
 		try {

@@ -23,6 +23,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.Authenticator;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
@@ -78,6 +79,8 @@ public class ElasticsearchClient {
 		URL url = new URL(urlText);
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 		String basicAuth;
+		//set the default authenticator to null to avoid pop up for authentication
+		Authenticator.setDefault(null);
 		if (url.getUserInfo() != null) {
 			basicAuth = "Basic " + DatatypeConverter.printBase64Binary(url.getUserInfo().getBytes());
 		} else {

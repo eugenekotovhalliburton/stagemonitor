@@ -23,6 +23,8 @@ import io.opentracing.tag.Tags;
  * A span which supports readback of tags and meta data
  */
 public class ReadbackSpan {
+	
+	private static final String SESSION_ID = System.getProperty("user.name", "unknown_user") + '_' + System.currentTimeMillis();
 
 	static {
 		JsonUtils.getMapper().registerModule(new SpanJsonModule());
@@ -40,6 +42,10 @@ public class ReadbackSpan {
 	private String timestamp;
 
 	private Map<String, Object> tags = new HashMap<String, Object>();
+	
+	public ReadbackSpan() {
+		tags.put("session_id", SESSION_ID);
+	}
 	
 	public String getOS() {
 		return os;
