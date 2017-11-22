@@ -19,6 +19,8 @@ public class MonitoredMethodRequest extends MonitoredRequest {
 	private final MethodExecution methodExecution;
 	private final Map<String, Object> parameters;
 	private final TracingPlugin tracingPlugin;
+	
+	private static long sessionStartTime = -1;
 
 	public MonitoredMethodRequest(ConfigurationRegistry configuration, String methodSignature, MethodExecution methodExecution) {
 		this(configuration, methodSignature, methodExecution, null);
@@ -65,7 +67,29 @@ public class MonitoredMethodRequest extends MonitoredRequest {
 		final Span span = spanBuilder.start();
 		SpanUtils.setParameters(span, getSafeParameterMap(parameters));
 		SpanUtils.setCustomProperties(span, methodSignature, parameters);
+		span.setTag("session_elapsed_time_ms", (System.currentTimeMillis() - getSessionStartTime()));
 		return span;
+	}
+
+	private static long getSessionStartTime() {
+		if(sessionStartTime == -1) {
+			sessionStartTime = fetchSessionStartTime();
+		}
+		return sessionStartTime;
+	}
+
+	private static long fetchSessionStartTime() {
+		long startTime = System.currentTimeMillis();
+    	String sessionId = System.getProperty("dsg_session_id");
+		if(sessionId != null) {
+			try {
+				String timeStampStr = sessionId.substring(sessionId.lastIndexOf('_') + 1);
+				startTime = Long.parseLong(timeStampStr);
+			} catch(Exception nfe) {
+				//do nothing
+			}
+		}
+		return startTime;
 	}
 
 	@Override

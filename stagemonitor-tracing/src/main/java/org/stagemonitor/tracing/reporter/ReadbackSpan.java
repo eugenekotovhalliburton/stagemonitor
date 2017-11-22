@@ -44,7 +44,8 @@ public class ReadbackSpan {
 	private Map<String, Object> tags = new HashMap<String, Object>();
 	
 	public ReadbackSpan() {
-		tags.put("session_id", SESSION_ID);
+		String sessionId = System.getProperty("dsg.session.id", SESSION_ID);
+		tags.put("session_id", sessionId);
 	}
 	
 	public String getOS() {
