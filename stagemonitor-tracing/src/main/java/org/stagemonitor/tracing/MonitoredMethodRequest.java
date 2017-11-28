@@ -67,7 +67,7 @@ public class MonitoredMethodRequest extends MonitoredRequest {
 		final Span span = spanBuilder.start();
 		SpanUtils.setParameters(span, getSafeParameterMap(parameters));
 		SpanUtils.setCustomProperties(span, methodSignature, parameters);
-		span.setTag("session_elapsed_time_ms", (System.currentTimeMillis() - getSessionStartTime()));
+		span.setTag("session_elapsed_time_millis", (System.currentTimeMillis() - getSessionStartTime()));
 		return span;
 	}
 
