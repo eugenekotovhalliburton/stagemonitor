@@ -34,6 +34,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutionException;
@@ -410,24 +411,30 @@ public class ElasticsearchClient {
 			if (StringUtils.isEmpty(elasticsearchUrl)) {
 				return;
 			}
-			httpClient.send("HEAD", elasticsearchUrl + "/", null, null, new HttpClient.ResponseHandler<Object>() {
-				@Override
-				public Object handleResponse(InputStream is, Integer statusCode, IOException e) throws IOException {
-					if (e != null) {
-						if (isElasticsearchAvailable()) {
-							logger.warn("Elasticsearch is not available. " +
-									"Stagemonitor won't try to send documents to Elasticsearch until it is available again.");
-						}
-							elasticsearchAvailable.set(false);
-						} else {
-							if (!isElasticsearchAvailable()) {
-								logger.info("Elasticsearch is available again.");
+			try {
+				httpClient.send("HEAD", elasticsearchUrl + "/", null, null, new HttpClient.ResponseHandler<Object>() {
+					@Override
+					public Object handleResponse(InputStream is, Integer statusCode, IOException e) throws IOException {
+						if (e != null) {
+							if (isElasticsearchAvailable()) {
+								logger.warn("Elasticsearch is not available. " +
+										"Stagemonitor won't try to send documents to Elasticsearch until it is available again.");
 							}
-							elasticsearchAvailable.set(true);
-						}
-					return null;
-				}
-			});
+								elasticsearchAvailable.set(false);
+							} else {
+								if (!isElasticsearchAvailable()) {
+									logger.info("Elasticsearch is available again.");
+								}
+								elasticsearchAvailable.set(true);
+							}
+						return null;
+					}
+				});
+			} catch (NoSuchElementException nse) {
+				// Defect 419646: ignore this ex. This comes from
+				// sun.net.www.protocol.http.HttpURLConnection when the response
+				// is an empty string.
+			}
 		}
 	}
 }
