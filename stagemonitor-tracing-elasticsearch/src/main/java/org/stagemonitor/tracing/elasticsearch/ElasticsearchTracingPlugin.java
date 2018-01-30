@@ -48,20 +48,23 @@ public class ElasticsearchTracingPlugin extends StagemonitorPlugin {
 	@Override
 	public void initializePlugin(InitArguments initArguments) throws Exception {
 		final CorePlugin corePlugin = initArguments.getPlugin(CorePlugin.class);
-		final ElasticsearchClient elasticsearchClient = corePlugin.getElasticsearchClient();
+		final List<ElasticsearchClient> elasticsearchClients = corePlugin.getElasticsearchClients();
 
 		final String spanMappingJson = ElasticsearchClient.modifyIndexTemplate(
 				spanIndexTemplate.getValue(), corePlugin.getMoveToColdNodesAfterDays(), corePlugin.getNumberOfReplicas(), corePlugin.getNumberOfShards());
-		elasticsearchClient.sendMappingTemplateAsync(spanMappingJson, "stagemonitor-spans");
+		for(ElasticsearchClient esClient : elasticsearchClients) {
+			esClient.sendMappingTemplateAsync(spanMappingJson, "stagemonitor-spans");
 
-		if (!corePlugin.getElasticsearchUrls().isEmpty()) {
-			elasticsearchClient.sendClassPathRessourceBulkAsync("kibana/stagemonitor-spans-kibana-index-pattern.bulk");
-			elasticsearchClient.sendClassPathRessourceBulkAsync("kibana/Request-Analysis.bulk");
-			elasticsearchClient.sendClassPathRessourceBulkAsync("kibana/Web-Analytics.bulk");
+			if (!corePlugin.getElasticsearchUrls().isEmpty()) {
+				esClient.sendClassPathRessourceBulkAsync("kibana/stagemonitor-spans-kibana-index-pattern.bulk");
+				esClient.sendClassPathRessourceBulkAsync("kibana/Request-Analysis.bulk");
+				esClient.sendClassPathRessourceBulkAsync("kibana/Web-Analytics.bulk");
 
-			elasticsearchClient.scheduleIndexManagement("stagemonitor-external-requests-",
-					corePlugin.getMoveToColdNodesAfterDays(), deleteSpansAfterDays.getValue());
+				esClient.scheduleIndexManagement("stagemonitor-external-requests-",
+						corePlugin.getMoveToColdNodesAfterDays(), deleteSpansAfterDays.getValue());
+			}
 		}
+		
 	}
 
 	@Override

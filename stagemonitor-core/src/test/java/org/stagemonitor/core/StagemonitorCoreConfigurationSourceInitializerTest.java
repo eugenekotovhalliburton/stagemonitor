@@ -1,5 +1,14 @@
 package org.stagemonitor.core;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -8,13 +17,6 @@ import org.stagemonitor.configuration.source.ConfigurationSource;
 import org.stagemonitor.configuration.source.SimpleSource;
 import org.stagemonitor.core.elasticsearch.ElasticsearchClient;
 import org.stagemonitor.core.util.HttpClient;
-
-import java.util.Collections;
-
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class StagemonitorCoreConfigurationSourceInitializerTest {
 
@@ -27,8 +29,9 @@ public class StagemonitorCoreConfigurationSourceInitializerTest {
 		when(corePlugin.getElasticsearchConfigurationSourceProfiles()).thenReturn(Collections.singletonList("test"));
 		when(corePlugin.getThreadPoolQueueCapacityLimit()).thenReturn(1000);
 		when(configuration.getConfig(CorePlugin.class)).thenReturn(corePlugin);
-		ElasticsearchClient elasticsearchClient = new ElasticsearchClient(corePlugin, new HttpClient(), -1);
-		when(corePlugin.getElasticsearchClient()).thenReturn(elasticsearchClient);
+		List<ElasticsearchClient> esClients = new ArrayList<>();
+		esClients.add(new ElasticsearchClient(corePlugin, new HttpClient(), -1, ""));
+		when(corePlugin.getElasticsearchClients()).thenReturn(esClients);
 	}
 
 	@Test(expected = IllegalStateException.class)

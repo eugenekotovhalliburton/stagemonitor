@@ -1,6 +1,17 @@
 package org.stagemonitor.tracing;
 
-import com.uber.jaeger.context.TracingUtils;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.stagemonitor.core.metrics.metrics2.MetricName.name;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.After;
 import org.junit.Before;
@@ -16,16 +27,7 @@ import org.stagemonitor.tracing.sampling.SamplePriorityDeterminingSpanEventListe
 import org.stagemonitor.tracing.utils.SpanUtils;
 import org.stagemonitor.tracing.wrapper.SpanWrappingTracer;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import static org.stagemonitor.core.metrics.metrics2.MetricName.name;
+import com.uber.jaeger.context.TracingUtils;
 
 public class MonitoredMethodExecutionTest {
 
@@ -54,7 +56,7 @@ public class MonitoredMethodExecutionTest {
 		when(corePlugin.isStagemonitorActive()).thenReturn(true);
 		when(corePlugin.getThreadPoolQueueCapacityLimit()).thenReturn(1000);
 		when(corePlugin.getMetricRegistry()).thenReturn(registry);
-		when(corePlugin.getElasticsearchClient()).thenReturn(mock(ElasticsearchClient.class));
+		when(corePlugin.getElasticsearchClients()).thenReturn(mockESClients());
 
 		spanContext1 = null;
 		final RequestMonitor requestMonitor = new RequestMonitor(configuration, registry);
@@ -68,6 +70,12 @@ public class MonitoredMethodExecutionTest {
 
 		testObject = new TestObject(requestMonitor);
 		assertTrue(TracingUtils.getTraceContext().isEmpty());
+	}
+	
+	private List<ElasticsearchClient> mockESClients() {
+		List<ElasticsearchClient> clients = new ArrayList<>();
+		clients.add(mock(ElasticsearchClient.class));
+		return clients;
 	}
 
 	@After

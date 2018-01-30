@@ -20,6 +20,7 @@ import org.stagemonitor.util.StringUtils;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
 import java.util.Map;
 
 import static org.stagemonitor.core.elasticsearch.ElasticsearchClient.CONTENT_TYPE_JSON;
@@ -40,7 +41,7 @@ public class ElasticsearchReporter extends ScheduledMetrics2Reporter {
 	private final HttpClient httpClient;
 	private final JsonFactory jfactory = new JsonFactory();
 	private final Metric2RegistryModule metric2RegistryModule;
-	private final ElasticsearchClient elasticsearchClient;
+	private final List<ElasticsearchClient> elasticsearchClients;
 
 	public static ElasticsearchReporter.Builder forRegistry(Metric2Registry registry, CorePlugin corePlugin) {
 		return new Builder(registry, corePlugin);
@@ -54,7 +55,7 @@ public class ElasticsearchReporter extends ScheduledMetrics2Reporter {
 		this.jfactory.setCodec(JsonUtils.getMapper());
 		this.metric2RegistryModule = new Metric2RegistryModule(builder.getRateUnit(), builder.getDurationUnit());
 		this.corePlugin = builder.getCorePlugin();
-		this.elasticsearchClient = corePlugin.getElasticsearchClient();
+		this.elasticsearchClients = corePlugin.getElasticsearchClients();
 	}
 
 	@Override
@@ -69,12 +70,14 @@ public class ElasticsearchReporter extends ScheduledMetrics2Reporter {
 		final Timer.Context time = registry.timer(reportingTimeMetricName).time();
 		final MetricsOutputStreamHandler metricsOutputStreamHandler = new MetricsOutputStreamHandler(gauges, counters, histograms, meters, timers, timestamp);
 		if (!corePlugin.isOnlyLogElasticsearchMetricReports()) {
-			if (!elasticsearchClient.isElasticsearchAvailable()) {
-				return;
-			}
+			for(ElasticsearchClient esClient: elasticsearchClients) {
+				if (!esClient.isElasticsearchAvailable()) {
+					return;
+				}
 
-			httpClient.send("POST", corePlugin.getElasticsearchUrl() + "/_bulk", CONTENT_TYPE_JSON,
-					metricsOutputStreamHandler, new ElasticsearchClient.BulkErrorReportingResponseHandler());
+				httpClient.send("POST", esClient.getElasticSearchUrl() + "/_bulk", CONTENT_TYPE_JSON,
+						metricsOutputStreamHandler, new ElasticsearchClient.BulkErrorReportingResponseHandler());
+			}
 		} else {
 			try {
 				final ByteArrayOutputStream os = new ByteArrayOutputStream();

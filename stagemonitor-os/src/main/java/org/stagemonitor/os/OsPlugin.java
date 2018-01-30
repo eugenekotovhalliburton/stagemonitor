@@ -20,6 +20,7 @@ import org.stagemonitor.os.metrics.NetworkMetricSet;
 import org.stagemonitor.os.metrics.SwapMetricSet;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -33,11 +34,13 @@ public class OsPlugin extends StagemonitorPlugin  {
 	public void initializePlugin(StagemonitorPlugin.InitArguments initArguments) throws Exception {
 		final CorePlugin corePlugin = initArguments.getPlugin(CorePlugin.class);
 
-		ElasticsearchClient elasticsearchClient = corePlugin.getElasticsearchClient();
+		List<ElasticsearchClient> elasticsearchClients = corePlugin.getElasticsearchClients();
 		if (corePlugin.isReportToElasticsearch()) {
 			final GrafanaClient grafanaClient = corePlugin.getGrafanaClient();
 			grafanaClient.sendGrafanaDashboardAsync("grafana/ElasticsearchHostDashboard.json");
-			elasticsearchClient.sendClassPathRessourceBulkAsync("kibana/Host.bulk");
+			for(ElasticsearchClient esClient : elasticsearchClients) {
+				esClient.sendClassPathRessourceBulkAsync("kibana/Host.bulk");
+			}
 		}
 
 		if (sigar == null) {

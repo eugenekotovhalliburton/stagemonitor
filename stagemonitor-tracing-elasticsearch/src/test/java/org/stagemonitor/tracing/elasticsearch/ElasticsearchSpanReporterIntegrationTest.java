@@ -1,6 +1,11 @@
 package org.stagemonitor.tracing.elasticsearch;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -10,6 +15,7 @@ import org.stagemonitor.AbstractElasticsearchTest;
 import org.stagemonitor.configuration.ConfigurationOption;
 import org.stagemonitor.configuration.ConfigurationRegistry;
 import org.stagemonitor.core.CorePlugin;
+import org.stagemonitor.core.elasticsearch.ElasticsearchClient;
 import org.stagemonitor.core.metrics.metrics2.Metric2Registry;
 import org.stagemonitor.tracing.TracingPlugin;
 import org.stagemonitor.tracing.reporter.ReportingSpanEventListener;
@@ -17,17 +23,12 @@ import org.stagemonitor.tracing.sampling.SamplePriorityDeterminingSpanEventListe
 import org.stagemonitor.tracing.tracing.B3Propagator;
 import org.stagemonitor.tracing.utils.SpanUtils;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import io.opentracing.Span;
 import io.opentracing.Tracer;
 import io.opentracing.mock.MockTracer;
 import io.opentracing.tag.Tags;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class ElasticsearchSpanReporterIntegrationTest extends AbstractElasticsearchTest {
 
@@ -43,7 +44,7 @@ public class ElasticsearchSpanReporterIntegrationTest extends AbstractElasticsea
 		when(configuration.getConfig(CorePlugin.class)).thenReturn(corePlugin);
 		when(configuration.getConfig(TracingPlugin.class)).thenReturn(tracingPlugin);
 		when(configuration.getConfig(ElasticsearchTracingPlugin.class)).thenReturn(mock(ElasticsearchTracingPlugin.class));
-		when(corePlugin.getElasticsearchClient()).thenReturn(elasticsearchClient);
+		when(corePlugin.getElasticsearchClients()).thenReturn(elasticsearchClients);
 		when(tracingPlugin.getDefaultRateLimitSpansPerMinute()).thenReturn(1000000d);
 		when(tracingPlugin.getProfilerRateLimitPerMinuteOption()).thenReturn(mock(ConfigurationOption.class));
 		when(tracingPlugin.isPseudonymizeUserNames()).thenReturn(true);
@@ -73,12 +74,15 @@ public class ElasticsearchSpanReporterIntegrationTest extends AbstractElasticsea
 		span.setTag(SpanUtils.OPERATION_TYPE, "method_invocation");
 		span.setTag("foo.bar", "baz");
 		span.finish();
-		elasticsearchClient.waitForCompletion();
-
-		refresh();
-		final JsonNode hits = elasticsearchClient.getJson("/stagemonitor-spans*/_search").get("hits");
-		Assert.assertEquals(1, hits.get("total").intValue());
-		validateSpanJson(hits.get("hits").elements().next().get("_source"));
+		for(ElasticsearchClient esclient : elasticsearchClients) {
+			
+			esclient.waitForCompletion();
+			
+			refresh();
+			final JsonNode hits = esclient.getJson("/stagemonitor-spans*/_search").get("hits");
+			Assert.assertEquals(1, hits.get("total").intValue());
+			validateSpanJson(hits.get("hits").elements().next().get("_source"));
+		}
 	}
 
 	private void validateSpanJson(JsonNode spanJson) {

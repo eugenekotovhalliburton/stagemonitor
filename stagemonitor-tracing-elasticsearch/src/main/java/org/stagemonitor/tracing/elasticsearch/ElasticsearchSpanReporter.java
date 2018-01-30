@@ -1,5 +1,7 @@
 package org.stagemonitor.tracing.elasticsearch;
 
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.stagemonitor.configuration.ConfigurationRegistry;
@@ -19,7 +21,7 @@ public class ElasticsearchSpanReporter extends SpanReporter {
 
 	protected CorePlugin corePlugin;
 	protected ElasticsearchTracingPlugin elasticsearchTracingPlugin;
-	protected ElasticsearchClient elasticsearchClient;
+	protected List<ElasticsearchClient> elasticsearchClients;
 	private static final String SPANS_TYPE = "spans";
 
 	public ElasticsearchSpanReporter() {
@@ -34,7 +36,7 @@ public class ElasticsearchSpanReporter extends SpanReporter {
 	public void init(ConfigurationRegistry configuration) {
 		corePlugin = configuration.getConfig(CorePlugin.class);
 		elasticsearchTracingPlugin = configuration.getConfig(ElasticsearchTracingPlugin.class);
-		elasticsearchClient = corePlugin.getElasticsearchClient();
+		elasticsearchClients = corePlugin.getElasticsearchClients();
 	}
 
 	@Override
@@ -43,14 +45,24 @@ public class ElasticsearchSpanReporter extends SpanReporter {
 		if (elasticsearchTracingPlugin.isOnlyLogElasticsearchSpanReports()) {
 			spanLogger.info(ElasticsearchClient.getBulkHeader("index", spansIndex, SPANS_TYPE) + JsonUtils.toJson(readbackSpan));
 		} else {
-			elasticsearchClient.index(spansIndex, SPANS_TYPE, readbackSpan);
+			for(ElasticsearchClient esClient : elasticsearchClients) {
+				esClient.index(spansIndex, SPANS_TYPE, readbackSpan);
+			}
 		}
 	}
 
 	@Override
 	public boolean isActive(SpanContextInformation spanContext) {
 		final boolean logOnly = elasticsearchTracingPlugin.isOnlyLogElasticsearchSpanReports();
-		return elasticsearchClient.isElasticsearchAvailable() || logOnly;
+		if(logOnly) {
+			return true;
+		}
+		for(ElasticsearchClient esClient : elasticsearchClients) {
+			if(esClient.isElasticsearchAvailable()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 }

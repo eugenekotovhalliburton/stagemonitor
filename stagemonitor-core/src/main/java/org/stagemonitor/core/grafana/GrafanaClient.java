@@ -1,24 +1,25 @@
 package org.stagemonitor.core.grafana;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.stagemonitor.core.CorePlugin;
-import org.stagemonitor.core.util.ExecutorUtils;
-import org.stagemonitor.core.util.HttpClient;
-import org.stagemonitor.util.IOUtils;
-import org.stagemonitor.core.util.JsonUtils;
-import org.stagemonitor.util.StringUtils;
-
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.stagemonitor.core.CorePlugin;
+import org.stagemonitor.core.util.ExecutorUtils;
+import org.stagemonitor.core.util.HttpClient;
+import org.stagemonitor.core.util.JsonUtils;
+import org.stagemonitor.util.IOUtils;
+import org.stagemonitor.util.StringUtils;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * Utility class for interacting with the Grafana HTTP API
@@ -46,7 +47,7 @@ public class GrafanaClient {
 				.createSingleThreadDeamonPool("async-grafana", corePlugin.getThreadPoolQueueCapacityLimit());
 	}
 
-	public void createElasticsearchDatasource(final String url) {
+	private void createElasticsearchDatasource(final String url) {
 		Map<String, Object> dataSource = new HashMap<String, Object>();
 		dataSource.put("name", ES_STAGEMONITOR_DS_NAME);
 		dataSource.put("url", url);
@@ -64,6 +65,15 @@ public class GrafanaClient {
 		jsonData.put("esVersion", 5);
 		dataSource.put("jsonData", jsonData);
 		asyncGrafanaRequest("POST", "/api/datasources", dataSource);
+	}
+	
+	public void createElasticsearchDatasource(final Collection<String> urls) {
+		if(urls == null || urls.isEmpty()) {
+			return;
+		}
+		for(String url : urls) {
+			createElasticsearchDatasource(url);
+		}
 	}
 
 	/**

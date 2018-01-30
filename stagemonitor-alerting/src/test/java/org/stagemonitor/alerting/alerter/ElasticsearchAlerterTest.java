@@ -1,14 +1,15 @@
 package org.stagemonitor.alerting.alerter;
 
+import java.util.Collection;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.stagemonitor.AbstractElasticsearchTest;
 import org.stagemonitor.alerting.check.CheckResult;
 import org.stagemonitor.alerting.incident.Incident;
+import org.stagemonitor.core.elasticsearch.ElasticsearchClient;
 import org.stagemonitor.core.util.HttpClient;
-
-import java.util.Collection;
 
 public class ElasticsearchAlerterTest extends AbstractElasticsearchTest {
 
@@ -29,9 +30,11 @@ public class ElasticsearchAlerterTest extends AbstractElasticsearchTest {
 	public void testAlert() throws Exception {
 		Incident incident = alertSender.sendTestAlert(abstractAlerterTest.createSubscription(elasticsearchAlerter), CheckResult.Status.ERROR);
 		refresh();
-		Collection<Incident> allIncidents = elasticsearchClient.getAll("/stagemonitor/alerts", 10, Incident.class);
-		Assert.assertEquals(1, allIncidents.size());
-		Assert.assertEquals(incident, allIncidents.iterator().next());
+		for(ElasticsearchClient esClient : elasticsearchClients) {
+			Collection<Incident> allIncidents = esClient.getAll("/stagemonitor/alerts", 10, Incident.class);
+			Assert.assertEquals(1, allIncidents.size());
+			Assert.assertEquals(incident, allIncidents.iterator().next());
+		}
 	}
 
 }

@@ -26,7 +26,7 @@ public class IncidentRepositoryTest<T extends IncidentRepository> extends Abstra
 		this.incidentRepository = incidentRepository;
 		if (incidentRepository instanceof ElasticsearchIncidentRepository) {
 			final ElasticsearchIncidentRepository elasticsearchIncidentRepository = (ElasticsearchIncidentRepository) incidentRepository;
-			elasticsearchIncidentRepository.setElasticsearchClient(elasticsearchClient);
+			elasticsearchIncidentRepository.setElasticsearchClient(elasticsearchClients);
 		}
 	}
 
@@ -38,7 +38,7 @@ public class IncidentRepositoryTest<T extends IncidentRepository> extends Abstra
 	@Parameterized.Parameters(name = "{index}: {1}")
 	public static Iterable<Object[]> data() {
 		return Arrays.asList(new Object[][]{
-				{new ElasticsearchIncidentRepository(elasticsearchClient), ElasticsearchIncidentRepository.class},
+				{new ElasticsearchIncidentRepository(elasticsearchClients), ElasticsearchIncidentRepository.class},
 				{new ConcurrentMapIncidentRepository(), ConcurrentMapIncidentRepository.class}
 		});
 	}

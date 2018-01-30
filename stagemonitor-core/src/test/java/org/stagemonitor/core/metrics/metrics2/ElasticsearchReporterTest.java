@@ -1,11 +1,30 @@
 package org.stagemonitor.core.metrics.metrics2;
 
-import com.codahale.metrics.Clock;
-import com.codahale.metrics.Counter;
-import com.codahale.metrics.Gauge;
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.Timer;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonMap;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.counter;
+import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.gauge;
+import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.histogram;
+import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.map;
+import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.meter;
+import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.metricNameMap;
+import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.objectMap;
+import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.timer;
+import static org.stagemonitor.core.metrics.metrics2.MetricName.name;
+
+import java.io.ByteArrayOutputStream;
+import java.net.HttpURLConnection;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
 import org.junit.Before;
@@ -20,29 +39,12 @@ import org.stagemonitor.core.util.HttpClient;
 import org.stagemonitor.core.util.JsonUtils;
 import org.stagemonitor.util.StringUtils;
 
-import java.io.ByteArrayOutputStream;
-import java.net.HttpURLConnection;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.concurrent.TimeUnit;
-
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonMap;
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.counter;
-import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.gauge;
-import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.histogram;
-import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.map;
-import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.meter;
-import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.metricNameMap;
-import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.objectMap;
-import static org.stagemonitor.core.metrics.MetricsReporterTestHelper.timer;
-import static org.stagemonitor.core.metrics.metrics2.MetricName.name;
+import com.codahale.metrics.Clock;
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.Gauge;
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.Timer;
 
 public class ElasticsearchReporterTest {
 
@@ -76,9 +78,11 @@ public class ElasticsearchReporterTest {
 		metricsLogger = mock(Logger.class);
 		corePlugin = mock(CorePlugin.class);
 		registry = new Metric2Registry();
-		final ElasticsearchClient elasticsearchClient = mock(ElasticsearchClient.class);
-		when(elasticsearchClient.isElasticsearchAvailable()).thenReturn(true);
-		when(corePlugin.getElasticsearchClient()).thenReturn(elasticsearchClient);
+		final List<ElasticsearchClient> elasticsearchClients = mockESClients();
+		for(ElasticsearchClient esclient: elasticsearchClients) {
+			when(esclient.isElasticsearchAvailable()).thenReturn(true);
+		}
+		when(corePlugin.getElasticsearchClients()).thenReturn(elasticsearchClients);
 		elasticsearchReporter = ElasticsearchReporter.forRegistry(registry, corePlugin)
 				.convertDurationsTo(DURATION_UNIT)
 				.globalTags(singletonMap("app", "test"))
@@ -89,6 +93,12 @@ public class ElasticsearchReporterTest {
 				.build();
 
 		out = new ByteArrayOutputStream();
+	}
+
+	private List<ElasticsearchClient> mockESClients() {
+		List<ElasticsearchClient> clients = new ArrayList<>();
+		clients.add(mock(ElasticsearchClient.class));
+		return clients;
 	}
 
 	@After

@@ -3,6 +3,9 @@ package org.stagemonitor.core;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.management.ObjectInstance;
 
 import com.codahale.metrics.Counter;
@@ -28,7 +31,7 @@ public class JmxReportingTest {
 		when(corePlugin.isReportToJMX()).thenReturn(true);
 		when(configuration.getConfig(CorePlugin.class)).thenReturn(corePlugin);
 
-		new CorePlugin(mock(ElasticsearchClient.class)).registerReporters(registry, configuration, new MeasurementSession("JmxReportingTest", "test", "test"));
+		new CorePlugin(getESClientList()).registerReporters(registry, configuration, new MeasurementSession("JmxReportingTest", "test", "test"));
 	}
 
 	@Test
@@ -42,5 +45,12 @@ public class JmxReportingTest {
 
 		counter.inc();
 		Assert.assertEquals(1L, MBeanUtils.getValueFromMBean(objectInstance, "Count"));
+	}
+	
+	private List<ElasticsearchClient> getESClientList() {
+		ElasticsearchClient mock = mock(ElasticsearchClient.class);
+		List<ElasticsearchClient> list = new ArrayList<>();
+		list.add(mock);
+		return list;
 	}
 }

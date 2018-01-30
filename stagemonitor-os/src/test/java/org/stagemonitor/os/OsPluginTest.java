@@ -7,10 +7,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.stagemonitor.core.metrics.metrics2.MetricName.name;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.codahale.metrics.Gauge;
 import org.hyperic.sigar.FileSystem;
 import org.hyperic.sigar.Sigar;
 import org.hyperic.sigar.SigarException;
@@ -18,15 +19,17 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.stagemonitor.configuration.ConfigurationRegistry;
 import org.stagemonitor.core.CorePlugin;
 import org.stagemonitor.core.MeasurementSession;
 import org.stagemonitor.core.StagemonitorPlugin;
-import org.stagemonitor.configuration.ConfigurationRegistry;
 import org.stagemonitor.core.elasticsearch.ElasticsearchClient;
 import org.stagemonitor.core.metrics.metrics2.Metric2Registry;
 import org.stagemonitor.core.metrics.metrics2.MetricName;
 import org.stagemonitor.junit.ConditionalTravisTestRunner;
 import org.stagemonitor.junit.ExcludeOnTravis;
+
+import com.codahale.metrics.Gauge;
 
 @RunWith(ConditionalTravisTestRunner.class)
 public class OsPluginTest {
@@ -45,10 +48,16 @@ public class OsPluginTest {
 		metricRegistry = new Metric2Registry();
 		final ConfigurationRegistry configuration = mock(ConfigurationRegistry.class);
 		final CorePlugin corePlugin = mock(CorePlugin.class);
-		when(corePlugin.getElasticsearchClient()).thenReturn(mock(ElasticsearchClient.class));
+		when(corePlugin.getElasticsearchClients()).thenReturn(mockESClients());
 		when(configuration.getConfig(CorePlugin.class)).thenReturn(corePlugin);
 		osPlugin.initializePlugin(new StagemonitorPlugin.InitArguments(metricRegistry, configuration, mock(MeasurementSession.class)));
 		this.sigar = osPlugin.getSigar();
+	}
+	
+	private List<ElasticsearchClient> mockESClients() {
+		List<ElasticsearchClient> clients = new ArrayList<>();
+		clients.add(mock(ElasticsearchClient.class));
+		return clients;
 	}
 
 	@Test

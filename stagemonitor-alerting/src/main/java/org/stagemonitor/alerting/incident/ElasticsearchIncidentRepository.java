@@ -1,31 +1,49 @@
 package org.stagemonitor.alerting.incident;
 
-import org.stagemonitor.core.elasticsearch.ElasticsearchClient;
-
 import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.stagemonitor.core.elasticsearch.ElasticsearchClient;
 
 public class ElasticsearchIncidentRepository implements IncidentRepository {
 
 	public static final String BASE_URL = "/stagemonitor/incidents";
-	private ElasticsearchClient elasticsearchClient;
+	private List<ElasticsearchClient> elasticsearchClients;
 
-	public ElasticsearchIncidentRepository(ElasticsearchClient elasticsearchClient) {
-		this.elasticsearchClient = elasticsearchClient;
+	public ElasticsearchIncidentRepository(List<ElasticsearchClient> elasticsearchClients) {
+		this.elasticsearchClients = elasticsearchClients;
 	}
 
 	@Override
 	public Collection<Incident> getAllIncidents() {
-		return elasticsearchClient.getAll(BASE_URL, 100, Incident.class);
+		Set<Incident> incidents = new LinkedHashSet<>();
+		for(ElasticsearchClient esClient : elasticsearchClients) {
+			incidents.addAll(esClient.getAll(BASE_URL, 100, Incident.class));
+		}
+		return incidents;
 	}
 
 	@Override
 	public Incident getIncidentByCheckId(String checkId) {
-		return elasticsearchClient.getObject(BASE_URL + "/" + checkId, Incident.class);
+		Incident incident = null;
+		for(ElasticsearchClient esClient : elasticsearchClients) {
+			incident = esClient.getObject(BASE_URL + "/" + checkId, Incident.class);
+			if(incident != null) {
+				return incident; //return first match
+			}
+		}
+		return incident;
 	}
 
 	@Override
 	public boolean deleteIncident(Incident incident) {
-		return hasNoConflict(elasticsearchClient.sendRequest("DELETE", BASE_URL + "/" + incident.getCheckId() + getVersionParameter(incident)));
+		boolean allSuccess = true;
+		for(ElasticsearchClient esClient : elasticsearchClients) {
+			allSuccess = allSuccess &&  hasNoConflict(esClient.sendRequest("DELETE", BASE_URL + "/" + incident.getCheckId() + getVersionParameter(incident)));
+		}
+		return allSuccess;
 	}
 
 	@Override
@@ -38,7 +56,11 @@ public class ElasticsearchIncidentRepository implements IncidentRepository {
 
 	@Override
 	public boolean updateIncident(Incident incident) {
-		return hasNoConflict(elasticsearchClient.sendAsJson("PUT", BASE_URL + "/" + incident.getCheckId() + getVersionParameter(incident), incident));
+		boolean allSuccess = true;
+		for(ElasticsearchClient esClient : elasticsearchClients) {
+			allSuccess = allSuccess &&  hasNoConflict(esClient.sendAsJson("PUT", BASE_URL + "/" + incident.getCheckId() + getVersionParameter(incident), incident));
+		}
+		return allSuccess;
 	}
 
 	@Override
@@ -56,7 +78,7 @@ public class ElasticsearchIncidentRepository implements IncidentRepository {
 		return statusCode != 409;
 	}
 
-	void setElasticsearchClient(ElasticsearchClient elasticsearchClient) {
-		this.elasticsearchClient = elasticsearchClient;
+	void setElasticsearchClient(List<ElasticsearchClient> elasticsearchClients) {
+		this.elasticsearchClients = elasticsearchClients;
 	}
 }

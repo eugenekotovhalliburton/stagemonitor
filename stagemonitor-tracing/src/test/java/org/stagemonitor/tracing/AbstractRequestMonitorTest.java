@@ -1,8 +1,16 @@
 package org.stagemonitor.tracing;
 
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.Timer;
-import com.uber.jaeger.context.TracingUtils;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.After;
 import org.junit.Before;
@@ -19,17 +27,11 @@ import org.stagemonitor.tracing.reporter.ReportingSpanEventListener;
 import org.stagemonitor.tracing.sampling.SamplePriorityDeterminingSpanEventListener;
 import org.stagemonitor.tracing.wrapper.SpanWrappingTracer;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.Timer;
+import com.uber.jaeger.context.TracingUtils;
 
 import io.opentracing.Tracer;
-
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public abstract class AbstractRequestMonitorTest {
 
@@ -57,9 +59,12 @@ public abstract class AbstractRequestMonitorTest {
 		doReturn(1000).when(corePlugin).getThreadPoolQueueCapacityLimit();
 		doReturn(new Metric2Registry()).when(corePlugin).getMetricRegistry();
 		doReturn(Collections.singletonList("http://mockhost:9200")).when(corePlugin).getElasticsearchUrls();
-		ElasticsearchClient elasticsearchClient = mock(ElasticsearchClient.class);
-		doReturn(true).when(elasticsearchClient).isElasticsearchAvailable();
-		doReturn(elasticsearchClient).when(corePlugin).getElasticsearchClient();
+		List<ElasticsearchClient> esClients = mockESClients();
+		for(ElasticsearchClient esclient: esClients) {
+			
+			doReturn(true).when(esclient).isElasticsearchAvailable();
+		}
+		doReturn(esClients).when(corePlugin).getElasticsearchClients();
 		doReturn(false).when(corePlugin).isOnlyLogElasticsearchMetricReports();
 
 		doReturn(true).when(tracingPlugin).isProfilerActive();
@@ -95,6 +100,12 @@ public abstract class AbstractRequestMonitorTest {
 			}
 		});
 		assertTrue(TracingUtils.getTraceContext().isEmpty());
+	}
+	
+	private List<ElasticsearchClient> mockESClients() {
+		List<ElasticsearchClient> clients = new ArrayList<>();
+		clients.add(mock(ElasticsearchClient.class));
+		return clients;
 	}
 
 	protected Tracer getTracer() {

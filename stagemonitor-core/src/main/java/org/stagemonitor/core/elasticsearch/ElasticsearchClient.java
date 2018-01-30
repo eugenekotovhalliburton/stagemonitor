@@ -1,28 +1,10 @@
 package org.stagemonitor.core.elasticsearch;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.stagemonitor.core.CorePlugin;
-import org.stagemonitor.core.Stagemonitor;
-import org.stagemonitor.core.pool.JavaThreadPoolMetricsCollectorImpl;
-import org.stagemonitor.core.pool.PooledResourceMetricsRegisterer;
-import org.stagemonitor.core.util.CompletedFuture;
-import org.stagemonitor.core.util.DateUtils;
-import org.stagemonitor.core.util.ExecutorUtils;
-import org.stagemonitor.core.util.HttpClient;
-import org.stagemonitor.core.util.JsonUtils;
-import org.stagemonitor.util.IOUtils;
-import org.stagemonitor.util.StringUtils;
-
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.management.ManagementFactory;
 import java.net.Authenticator;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -46,6 +28,25 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.xml.bind.DatatypeConverter;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.stagemonitor.core.CorePlugin;
+import org.stagemonitor.core.Stagemonitor;
+import org.stagemonitor.core.pool.JavaThreadPoolMetricsCollectorImpl;
+import org.stagemonitor.core.pool.PooledResourceMetricsRegisterer;
+import org.stagemonitor.core.util.CompletedFuture;
+import org.stagemonitor.core.util.DateUtils;
+import org.stagemonitor.core.util.ExecutorUtils;
+import org.stagemonitor.core.util.HttpClient;
+import org.stagemonitor.core.util.JsonUtils;
+import org.stagemonitor.util.IOUtils;
+import org.stagemonitor.util.StringUtils;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 public class ElasticsearchClient {
 
 	public static final Map<String, String> CONTENT_TYPE_JSON = Collections.singletonMap("Content-Type", "application/json");
@@ -54,12 +55,15 @@ public class ElasticsearchClient {
 	private final HttpClient httpClient;
 	private final CorePlugin corePlugin;
 	private final AtomicBoolean elasticsearchAvailable = new AtomicBoolean(true);
+	
+	private String elasticSearchUrl;
 
 	private final ThreadPoolExecutor asyncESPool;
 	private Timer timer;
 
-	public ElasticsearchClient(final CorePlugin corePlugin, final HttpClient httpClient, int esAvailabilityCheckIntervalSec) {
+	public ElasticsearchClient(final CorePlugin corePlugin, final HttpClient httpClient, int esAvailabilityCheckIntervalSec, final String esUrl) {
 		this.corePlugin = corePlugin;
+		this.elasticSearchUrl = esUrl != null ? esUrl : "";
 		asyncESPool = ExecutorUtils
 				.createSingleThreadDeamonPool("async-elasticsearch", corePlugin.getThreadPoolQueueCapacityLimit());
 		timer = new Timer("elasticsearch-tasks", true);
@@ -71,12 +75,13 @@ public class ElasticsearchClient {
 
 		if (esAvailabilityCheckIntervalSec > 0) {
 			final long period = TimeUnit.SECONDS.toMillis(esAvailabilityCheckIntervalSec);
-			timer.scheduleAtFixedRate(new CheckEsAvailability(httpClient, corePlugin), 0, period);
+			timer.scheduleAtFixedRate(new CheckEsAvailability(httpClient, elasticSearchUrl), 0, period);
 		}
+		
 	}
 
 	public JsonNode getJson(final String path) throws IOException {
-		String urlText = corePlugin.getElasticsearchUrl()+ path;
+		String urlText = elasticSearchUrl + path;
 		URL url = new URL(urlText);
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 		String basicAuth;
@@ -124,7 +129,7 @@ public class ElasticsearchClient {
 		if (!isElasticsearchAvailable()) {
 			return -1;
 		}
-		return httpClient.sendAsJson(method, corePlugin.getElasticsearchUrl() + path, requestBody, CONTENT_TYPE_JSON);
+		return httpClient.sendAsJson(method, elasticSearchUrl + path, requestBody, CONTENT_TYPE_JSON);
 	}
 
 	public void index(final String index, final String type, final Object document) {
@@ -223,7 +228,7 @@ public class ElasticsearchClient {
 		if (!isElasticsearchAvailable()) {
 			return;
 		}
-		httpClient.send("POST", corePlugin.getElasticsearchUrl() + endpoint + "/_bulk", CONTENT_TYPE_JSON, outputStreamHandler, new BulkErrorReportingResponseHandler());
+		httpClient.send("POST", elasticSearchUrl + endpoint + "/_bulk", CONTENT_TYPE_JSON, outputStreamHandler, new BulkErrorReportingResponseHandler());
 	}
 
 	public void deleteIndices(String indexPattern) {
@@ -238,7 +243,7 @@ public class ElasticsearchClient {
 		if (!isElasticsearchAvailable()) {
 			return;
 		}
-		final String url = corePlugin.getElasticsearchUrl() + "/" + indexPattern + "/_settings?ignore_unavailable=true";
+		final String url = elasticSearchUrl + "/" + indexPattern + "/_settings?ignore_unavailable=true";
 		logger.info("Updating index settings {}\n{}", url, settings);
 		httpClient.sendAsJson("PUT", url, settings, CONTENT_TYPE_JSON);
 	}
@@ -247,7 +252,7 @@ public class ElasticsearchClient {
 		if (!isElasticsearchAvailable()) {
 			return;
 		}
-		final String url = corePlugin.getElasticsearchUrl() + "/" + path;
+		final String url = elasticSearchUrl + "/" + path;
 		logger.info(logMessage, url);
 		try {
 			httpClient.send(method, url);
@@ -321,7 +326,7 @@ public class ElasticsearchClient {
 	}
 
 	public boolean isElasticsearchAvailable() {
-		return !corePlugin.getElasticsearchUrls().isEmpty() && elasticsearchAvailable.get();
+		return !elasticSearchUrl.isEmpty() && elasticsearchAvailable.get();
 	}
 
 	public static class BulkErrorReportingResponseHandler implements HttpClient.ResponseHandler<Void> {
@@ -395,11 +400,11 @@ public class ElasticsearchClient {
 
 	private class CheckEsAvailability extends TimerTask {
 		private final HttpClient httpClient;
-		private final CorePlugin corePlugin;
+		private final String esURL;
 
-		public CheckEsAvailability(HttpClient httpClient, CorePlugin corePlugin) {
+		public CheckEsAvailability(HttpClient httpClient, String elasticSearchUrl) {
 			this.httpClient = httpClient;
-			this.corePlugin = corePlugin;
+			this.esURL = elasticSearchUrl;
 		}
 
 		@Override
@@ -407,12 +412,11 @@ public class ElasticsearchClient {
 			// TODO actually, the availability check has to be performed for each URL as multiple ES urls can be configured
 			// in the future, detect all available nodes in the cluster: http://{oneOfTheProvidedUrls}/_nodes/box_type:hot/none
 			// -> response.nodes*.http_address
-			final String elasticsearchUrl = corePlugin.getElasticsearchUrl();
-			if (StringUtils.isEmpty(elasticsearchUrl)) {
+			if (StringUtils.isEmpty(esURL)) {
 				return;
 			}
 			try {
-				httpClient.send("HEAD", elasticsearchUrl + "/", null, null, new HttpClient.ResponseHandler<Object>() {
+				httpClient.send("HEAD", esURL + "/", null, null, new HttpClient.ResponseHandler<Object>() {
 					@Override
 					public Object handleResponse(InputStream is, Integer statusCode, IOException e) throws IOException {
 						if (e != null) {
@@ -436,5 +440,9 @@ public class ElasticsearchClient {
 				// is an empty string.
 			}
 		}
+	}
+
+	public String getElasticSearchUrl() {
+		return this.elasticSearchUrl;
 	}
 }

@@ -35,8 +35,10 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Future;
@@ -392,7 +394,7 @@ public class CorePlugin extends StagemonitorPlugin {
 
 	private List<Closeable> reporters = new CopyOnWriteArrayList<Closeable>();
 
-	private ElasticsearchClient elasticsearchClient;
+	private List<ElasticsearchClient> elasticsearchClients;
 	private GrafanaClient grafanaClient;
 	private IndexSelector indexSelector = new IndexSelector(new Clock.UserTimeClock());
 	private Metric2Registry metricRegistry;
@@ -401,8 +403,8 @@ public class CorePlugin extends StagemonitorPlugin {
 	public CorePlugin() {
 	}
 
-	public CorePlugin(ElasticsearchClient elasticsearchClient) {
-		this.elasticsearchClient = elasticsearchClient;
+	public CorePlugin(List<ElasticsearchClient> elasticsearchClients) {
+		this.elasticsearchClients = elasticsearchClients;
 	}
 
 	@Override
@@ -420,12 +422,14 @@ public class CorePlugin extends StagemonitorPlugin {
 			}
 		});
 
-		ElasticsearchClient elasticsearchClient = getElasticsearchClient();
-		sendConfigurationMappingAsync(elasticsearchClient);
+		List<ElasticsearchClient> esClients = getElasticsearchClients();
+		for(ElasticsearchClient elasticsearchClient : esClients) {
+			sendConfigurationMappingAsync(elasticsearchClient);
+		}
 
 		if (isReportToElasticsearch()) {
 			final GrafanaClient grafanaClient = getGrafanaClient();
-			grafanaClient.createElasticsearchDatasource(getElasticsearchUrl());
+			grafanaClient.createElasticsearchDatasource(getElasticsearchUrls());
 			grafanaClient.sendGrafanaDashboardAsync("grafana/ElasticsearchCustomMetricsDashboard.json");
 		}
 		registerReporters(initArguments.getMetricRegistry(), initArguments.getConfiguration(), initArguments.getMeasurementSession());
@@ -502,13 +506,11 @@ public class CorePlugin extends StagemonitorPlugin {
 	private void reportToElasticsearch(Metric2Registry metricRegistry, int reportingInterval,
 									   final MeasurementSession measurementSession) {
 		if (isReportToElasticsearch()) {
-			elasticsearchClient.sendClassPathRessourceBulkAsync("stagemonitor-metrics-kibana-index-pattern.bulk");
-			logger.info("Sending metrics to Elasticsearch ({}) every {}s", getElasticsearchUrls(), reportingInterval);
-			final String mappingJson = ElasticsearchClient.modifyIndexTemplate(
-					metricsIndexTemplate.getValue(), moveToColdNodesAfterDays.getValue(), getNumberOfReplicas(), getNumberOfShards());
-			elasticsearchClient.sendMappingTemplateAsync(mappingJson, "stagemonitor-metrics");
-			elasticsearchClient.scheduleIndexManagement(ElasticsearchReporter.STAGEMONITOR_METRICS_INDEX_PREFIX,
-					moveToColdNodesAfterDays.getValue(), deleteElasticsearchMetricsAfterDays.getValue());
+			List<ElasticsearchClient> esClients = getElasticsearchClients();
+			for (ElasticsearchClient client: esClients) {
+				perofrmReportToES(reportingInterval, client);
+			}
+			
 		}
 
 		if (isReportToElasticsearch() || isOnlyLogElasticsearchMetricReports()) {
@@ -521,6 +523,16 @@ public class CorePlugin extends StagemonitorPlugin {
 		} else {
 			logger.info("Not sending metrics to Elasticsearch (url={}, interval={}s)", getElasticsearchUrls(), reportingInterval);
 		}
+	}
+
+	private void perofrmReportToES(int reportingInterval, ElasticsearchClient esClient) {
+		esClient.sendClassPathRessourceBulkAsync("stagemonitor-metrics-kibana-index-pattern.bulk");
+		logger.info("Sending metrics to Elasticsearch ({}) every {}s", getElasticsearchUrls(), reportingInterval);
+		final String mappingJson = ElasticsearchClient.modifyIndexTemplate(
+				metricsIndexTemplate.getValue(), moveToColdNodesAfterDays.getValue(), getNumberOfReplicas(), getNumberOfShards());
+		esClient.sendMappingTemplateAsync(mappingJson, "stagemonitor-metrics");
+		esClient.scheduleIndexManagement(ElasticsearchReporter.STAGEMONITOR_METRICS_INDEX_PREFIX,
+				moveToColdNodesAfterDays.getValue(), deleteElasticsearchMetricsAfterDays.getValue());
 	}
 
 	private String getGraphitePrefix(MeasurementSession measurementSession) {
@@ -558,8 +570,12 @@ public class CorePlugin extends StagemonitorPlugin {
 			}
 		}
 
-		if (elasticsearchClient != null) {
-			elasticsearchClient.close();
+		if (elasticsearchClients != null) {
+			for(ElasticsearchClient cli : elasticsearchClients) {
+				if(cli != null) {
+					cli.close();
+				}
+			}
 		}
 		if (grafanaClient != null) {
 			grafanaClient.close();
@@ -574,11 +590,18 @@ public class CorePlugin extends StagemonitorPlugin {
 		return metricRegistry;
 	}
 
-	public ElasticsearchClient getElasticsearchClient() {
-		if (elasticsearchClient == null) {
-			elasticsearchClient = new ElasticsearchClient(this, new HttpClient(), elasticsearchAvailabilityCheckPeriodSec.getValue());
+	public List<ElasticsearchClient> getElasticsearchClients() {
+		if (elasticsearchClients == null) {
+			elasticsearchClients = new ArrayList<>(); 
+			Collection<String> esUrls = getElasticsearchUrls();
+			if(esUrls != null && !esUrls.isEmpty()) {
+				for(String url: esUrls) {
+					elasticsearchClients.add(new ElasticsearchClient(this, new HttpClient(), elasticsearchAvailabilityCheckPeriodSec.getValue(), url));
+				}
+			}
+			
 		}
-		return elasticsearchClient;
+		return elasticsearchClients;
 	}
 
 	public GrafanaClient getGrafanaClient() {
@@ -588,8 +611,8 @@ public class CorePlugin extends StagemonitorPlugin {
 		return grafanaClient;
 	}
 
-	public void setElasticsearchClient(ElasticsearchClient elasticsearchClient) {
-		this.elasticsearchClient = elasticsearchClient;
+	public void setElasticsearchClient(List<ElasticsearchClient> elasticsearchClients) {
+		this.elasticsearchClients = elasticsearchClients;
 	}
 
 	public static String getNameOfLocalHost() {
@@ -653,27 +676,27 @@ public class CorePlugin extends StagemonitorPlugin {
 		return hostName.getValue();
 	}
 
-	/**
-	 * Cycles through all provided Elasticsearch URLs and returns one
-	 *
-	 * @return One of the provided Elasticsearch URLs
-	 */
-	public String getElasticsearchUrl() {
-		final List<String> urls = elasticsearchUrls.getValue();
-//		System.out.println("***** ES url *****");
-//		StringBuilder sb = new StringBuilder("Length " + urls.size() + ": ");
-//		for(int i = 0; i < urls.size(); ++i){
-//			sb.append(urls.get(i)).append("; ");
+//	/**
+//	 * Cycles through all provided Elasticsearch URLs and returns one
+//	 *
+//	 * @return One of the provided Elasticsearch URLs
+//	 */
+//	public String getElasticsearchUrl() {
+//		final List<String> urls = elasticsearchUrls.getValue();
+////		System.out.println("***** ES url *****");
+////		StringBuilder sb = new StringBuilder("Length " + urls.size() + ": ");
+////		for(int i = 0; i < urls.size(); ++i){
+////			sb.append(urls.get(i)).append("; ");
+////		}
+////		System.out.println(sb.toString());
+//		if (urls.isEmpty()) {
+//			return null;
 //		}
-//		System.out.println(sb.toString());
-		if (urls.isEmpty()) {
-			return null;
-		}
-		final int index = accessesToElasticsearchUrl.getAndIncrement() % urls.size();
-//		System.out.println("returned -> " + urls.get(index));
-//		System.out.println("----- ES url -----");
-		return StringUtils.removeTrailingSlash(urls.get(index));
-	}
+//		final int index = accessesToElasticsearchUrl.getAndIncrement() % urls.size();
+////		System.out.println("returned -> " + urls.get(index));
+////		System.out.println("----- ES url -----");
+//		return StringUtils.removeTrailingSlash(urls.get(index));
+//	}
 
 	public Collection<String> getElasticsearchUrls() {
 		return elasticsearchUrls.getValue();

@@ -17,6 +17,8 @@ import org.stagemonitor.core.metrics.metrics2.MetricNameConverter;
 
 import static org.stagemonitor.core.metrics.metrics2.MetricName.name;
 
+import java.util.List;
+
 public class JvmPlugin extends StagemonitorPlugin {
 	private final Logger logger = LoggerFactory.getLogger(getClass());
 
@@ -59,10 +61,12 @@ public class JvmPlugin extends StagemonitorPlugin {
 		}
 
 		final CorePlugin config = initArguments.getPlugin(CorePlugin.class);
-		ElasticsearchClient elasticsearchClient = config.getElasticsearchClient();
+		List<ElasticsearchClient> elasticsearchClients = config.getElasticsearchClients();
 		final GrafanaClient grafanaClient = config.getGrafanaClient();
 		if (config.isReportToElasticsearch()) {
-			elasticsearchClient.sendClassPathRessourceBulkAsync("kibana/JVM.bulk");
+			for(ElasticsearchClient esClient : elasticsearchClients) {
+				esClient.sendClassPathRessourceBulkAsync("kibana/JVM.bulk");
+			}
 			grafanaClient.sendGrafanaDashboardAsync("grafana/ElasticsearchJvm.json");
 		}
 	}

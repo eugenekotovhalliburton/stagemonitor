@@ -1,5 +1,9 @@
 package org.stagemonitor.core;
 
+import java.io.IOException;
+import java.util.Collection;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.stagemonitor.configuration.ConfigurationRegistry;
@@ -9,9 +13,6 @@ import org.stagemonitor.configuration.source.PropertyFileConfigurationSource;
 import org.stagemonitor.configuration.source.SimpleSource;
 import org.stagemonitor.configuration.source.SystemPropertyConfigurationSource;
 import org.stagemonitor.core.elasticsearch.ElasticsearchClient;
-
-import java.io.IOException;
-import java.util.Collection;
 
 public class StagemonitorCoreConfigurationSourceInitializer extends StagemonitorConfigurationSourceInitializer {
 
@@ -42,16 +43,18 @@ public class StagemonitorCoreConfigurationSourceInitializer extends Stagemonitor
 	}
 
 	private void addElasticsearchConfigurationSources(ConfigurationRegistry configuration, CorePlugin corePlugin, Collection<String> elasticsearchConfigurationSourceIds) {
-		ElasticsearchClient elasticsearchClient = configuration.getConfig(CorePlugin.class).getElasticsearchClient();
-		if (corePlugin.isDeactivateStagemonitorIfEsConfigSourceIsDown()) {
-			assertElasticsearchIsAvailable(elasticsearchClient, corePlugin);
-		}
+		List<ElasticsearchClient> elasticsearchClients = configuration.getConfig(CorePlugin.class).getElasticsearchClients();
+		for(ElasticsearchClient elasticsearchClient: elasticsearchClients) {
+			if (corePlugin.isDeactivateStagemonitorIfEsConfigSourceIsDown()) {
+				assertElasticsearchIsAvailable(elasticsearchClient, corePlugin);
+			}
 
-		for (String configurationId : elasticsearchConfigurationSourceIds) {
-			final ElasticsearchConfigurationSource esSource = new ElasticsearchConfigurationSource(elasticsearchClient, configurationId);
-			configuration.addConfigurationSourceAfter(esSource, SimpleSource.class);
+			for (String configurationId : elasticsearchConfigurationSourceIds) {
+				final ElasticsearchConfigurationSource esSource = new ElasticsearchConfigurationSource(elasticsearchClient, configurationId);
+				configuration.addConfigurationSourceAfter(esSource, SimpleSource.class);
+			}
+			configuration.reloadAllConfigurationOptions();
 		}
-		configuration.reloadAllConfigurationOptions();
 	}
 
 	private void assertElasticsearchIsAvailable(ElasticsearchClient elasticsearchClient, CorePlugin corePlugin) {
@@ -59,7 +62,7 @@ public class StagemonitorCoreConfigurationSourceInitializer extends Stagemonitor
 			elasticsearchClient.getJson("/");
 		} catch (IOException e) {
 			throw new IllegalStateException("Property stagemonitor.configuration.elasticsearch.configurationSourceProfiles was set " +
-					"but elasticsearch is not reachable at " + corePlugin.getElasticsearchUrl(), e);
+					"but elasticsearch is not reachable at " + elasticsearchClient.getElasticSearchUrl(), e);
 		}
 	}
 }

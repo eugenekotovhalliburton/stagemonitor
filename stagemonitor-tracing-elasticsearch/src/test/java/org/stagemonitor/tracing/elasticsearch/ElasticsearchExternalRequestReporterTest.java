@@ -45,7 +45,7 @@ public class ElasticsearchExternalRequestReporterTest extends AbstractElasticsea
 		when(elasticsearchTracingPlugin.isOnlyLogElasticsearchSpanReports()).thenReturn(false);
 		reportSpan();
 
-		Mockito.verify(elasticsearchClient).index(ArgumentMatchers.startsWith("stagemonitor-spans-"), ArgumentMatchers.eq("spans"), ArgumentMatchers.any());
+		Mockito.verify(elasticsearchClients.get(0)).index(ArgumentMatchers.startsWith("stagemonitor-spans-"), ArgumentMatchers.eq("spans"), ArgumentMatchers.any());
 		Assert.assertTrue(reporter.isActive(null));
 		verifyTimerCreated(1);
 	}
@@ -53,11 +53,10 @@ public class ElasticsearchExternalRequestReporterTest extends AbstractElasticsea
 	@Test
 	public void doNotReportSpan() throws Exception {
 		when(elasticsearchTracingPlugin.isOnlyLogElasticsearchSpanReports()).thenReturn(false);
-		when(elasticsearchClient.isElasticsearchAvailable()).thenReturn(false);
-		when(corePlugin.getElasticsearchUrl()).thenReturn(null);
+		when(elasticsearchClients.get(0).isElasticsearchAvailable()).thenReturn(false);
 		reportSpan();
 
-		Mockito.verify(elasticsearchClient, Mockito.times(0)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
+		Mockito.verify(elasticsearchClients.get(0), Mockito.times(0)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
 		Mockito.verify(spanLogger, Mockito.times(0)).info(ArgumentMatchers.anyString());
 		Assert.assertFalse(reporter.isActive(null));
 		verifyTimerCreated(1);
@@ -68,7 +67,7 @@ public class ElasticsearchExternalRequestReporterTest extends AbstractElasticsea
 		when(elasticsearchTracingPlugin.isOnlyLogElasticsearchSpanReports()).thenReturn(true);
 
 		reportSpan();
-		Mockito.verify(elasticsearchClient, Mockito.times(0)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
+		Mockito.verify(elasticsearchClients.get(0), Mockito.times(0)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
 		Mockito.verify(spanLogger).info(ArgumentMatchers.startsWith("{\"index\":{\"_index\":\"stagemonitor-spans-"));
 	}
 
@@ -76,7 +75,7 @@ public class ElasticsearchExternalRequestReporterTest extends AbstractElasticsea
 	public void reportSpanRateLimited() throws Exception {
 		when(tracingPlugin.getDefaultRateLimitSpansPerMinute()).thenReturn(1d);
 		reportSpan();
-		Mockito.verify(elasticsearchClient).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
+		Mockito.verify(elasticsearchClients.get(0)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
 		reportSpan();
 		Mockito.verifyNoMoreInteractions(spanLogger);
 		verifyTimerCreated(2);
@@ -87,7 +86,7 @@ public class ElasticsearchExternalRequestReporterTest extends AbstractElasticsea
 		when(tracingPlugin.getExcludeExternalRequestsFasterThan()).thenReturn(100d);
 
 		reportSpan(100);
-		Mockito.verify(elasticsearchClient).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
+		Mockito.verify(elasticsearchClients.get(0)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
 
 		reportSpan(99);
 		Mockito.verifyNoMoreInteractions(spanLogger);
@@ -99,7 +98,7 @@ public class ElasticsearchExternalRequestReporterTest extends AbstractElasticsea
 		when(tracingPlugin.getExcludeExternalRequestsWhenFasterThanXPercent()).thenReturn(0.85d);
 
 		reportSpan(1000);
-		Mockito.verify(elasticsearchClient).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
+		Mockito.verify(elasticsearchClients.get(0)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
 		reportSpan(250);
 		Mockito.verifyNoMoreInteractions(spanLogger);
 		verifyTimerCreated(2);
@@ -118,7 +117,7 @@ public class ElasticsearchExternalRequestReporterTest extends AbstractElasticsea
 		reportSpan(250);
 		reportSpan(1000);
 
-		Mockito.verify(elasticsearchClient, Mockito.times(2)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
+		Mockito.verify(elasticsearchClients.get(0), Mockito.times(2)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
 		verifyTimerCreated(2);
 	}
 

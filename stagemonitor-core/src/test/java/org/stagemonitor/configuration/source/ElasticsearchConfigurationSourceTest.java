@@ -1,6 +1,7 @@
 package org.stagemonitor.configuration.source;
 
-import com.codahale.metrics.SharedMetricRegistries;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.junit.AfterClass;
@@ -10,11 +11,11 @@ import org.junit.runner.RunWith;
 import org.stagemonitor.AbstractElasticsearchTest;
 import org.stagemonitor.core.CorePlugin;
 import org.stagemonitor.core.Stagemonitor;
+import org.stagemonitor.core.elasticsearch.ElasticsearchClient;
 import org.stagemonitor.junit.ConditionalTravisTestRunner;
 import org.stagemonitor.junit.ExcludeOnTravis;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import com.codahale.metrics.SharedMetricRegistries;
 
 @RunWith(ConditionalTravisTestRunner.class)
 public class ElasticsearchConfigurationSourceTest extends AbstractElasticsearchTest {
@@ -29,8 +30,10 @@ public class ElasticsearchConfigurationSourceTest extends AbstractElasticsearchT
 
 	@Before
 	public void setUp() throws Exception {
-		CorePlugin.sendConfigurationMappingAsync(elasticsearchClient).get();
-		configurationSource = new ElasticsearchConfigurationSource(elasticsearchClient, "test");
+		for(ElasticsearchClient esClient : elasticsearchClients) {
+			CorePlugin.sendConfigurationMappingAsync(esClient).get();
+			configurationSource = new ElasticsearchConfigurationSource(esClient, "test");
+		}
 	}
 
 	@Test

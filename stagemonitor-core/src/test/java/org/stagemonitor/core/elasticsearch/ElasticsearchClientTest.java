@@ -45,7 +45,9 @@ public class ElasticsearchClientTest extends AbstractElasticsearchTest {
 	@Test
 	public void testGetDashboardForElasticsearch() throws Exception {
 		String expected = "{\"user\":\"guest\",\"group\":\"guest\",\"title\":\"Test Title\",\"tags\":[\"jdbc\",\"db\"],\"dashboard\":\"{\\\"title\\\":\\\"Test Title\\\",\\\"editable\\\":false,\\\"failover\\\":false,\\\"panel_hints\\\":true,\\\"style\\\":\\\"dark\\\",\\\"refresh\\\":\\\"1m\\\",\\\"tags\\\":[\\\"jdbc\\\",\\\"db\\\"],\\\"timezone\\\":\\\"browser\\\"}\"}";
-		assertEquals(expected, elasticsearchClient.getDashboardForElasticsearch("Test Dashboard.json").toString());
+		for(ElasticsearchClient esClient: elasticsearchClients) {
+			assertEquals(expected, esClient.getDashboardForElasticsearch("Test Dashboard.json").toString());
+		}
 	}
 
 	@Test
@@ -74,16 +76,18 @@ public class ElasticsearchClientTest extends AbstractElasticsearchTest {
 
 	@Test
 	public void modifyIndexTemplateIntegrationTest() throws Exception {
-		elasticsearchClient.sendMappingTemplateAsync(modifyIndexTemplate("stagemonitor-elasticsearch-metrics-index-template.json", 0, 1, 2), "stagemonitor-elasticsearch-metrics");
-		elasticsearchClient.waitForCompletion();
-		refresh();
-		elasticsearchClient.index("stagemonitor-metrics-test", "metrics", Collections.singletonMap("count", 1));
-		elasticsearchClient.waitForCompletion();
-		refresh();
-		final JsonNode indexSettings = elasticsearchClient.getJson("/stagemonitor-metrics-test/_settings")
-				.get("stagemonitor-metrics-test").get("settings").get("index");
-		assertEquals(indexSettings.toString(),1, indexSettings.get("number_of_replicas").asInt());
-		assertEquals(indexSettings.toString(),2, indexSettings.get("number_of_shards").asInt());
+		for(ElasticsearchClient esclient : elasticsearchClients) {
+			esclient.sendMappingTemplateAsync(modifyIndexTemplate("stagemonitor-elasticsearch-metrics-index-template.json", 0, 1, 2), "stagemonitor-elasticsearch-metrics");
+			esclient.waitForCompletion();
+			refresh();
+			esclient.index("stagemonitor-metrics-test", "metrics", Collections.singletonMap("count", 1));
+			esclient.waitForCompletion();
+			refresh();
+			final JsonNode indexSettings = esclient.getJson("/stagemonitor-metrics-test/_settings")
+					.get("stagemonitor-metrics-test").get("settings").get("index");
+			assertEquals(indexSettings.toString(),1, indexSettings.get("number_of_replicas").asInt());
+			assertEquals(indexSettings.toString(),2, indexSettings.get("number_of_shards").asInt());
+		}
 	}
 
 	@Test
@@ -94,43 +98,49 @@ public class ElasticsearchClientTest extends AbstractElasticsearchTest {
 
 	@Test
 	public void testBulkNoRequest() {
-		elasticsearchClient.sendBulk("", new HttpClient.OutputStreamHandler() {
-			@Override
-			public void withHttpURLConnection(OutputStream os) throws IOException {
-				os.write(("").getBytes("UTF-8"));
-			}
-		});
-		assertThat(testAppender.list).hasSize(1);
-		final ILoggingEvent event = testAppender.list.get(0);
-		assertThat(event.getLevel().toString()).isEqualTo("WARN");
-		assertThat(event.getMessage()).startsWith("Error(s) while sending a _bulk request to elasticsearch: {}");
+		for(ElasticsearchClient esclient : elasticsearchClients) {
+			esclient.sendBulk("", new HttpClient.OutputStreamHandler() {
+				@Override
+				public void withHttpURLConnection(OutputStream os) throws IOException {
+					os.write(("").getBytes("UTF-8"));
+				}
+			});
+			assertThat(testAppender.list).hasSize(1);
+			final ILoggingEvent event = testAppender.list.get(0);
+			assertThat(event.getLevel().toString()).isEqualTo("WARN");
+			assertThat(event.getMessage()).startsWith("Error(s) while sending a _bulk request to elasticsearch: {}");
+		}
 	}
 
 	@Test
 	public void testBulkErrorInvalidRequest() {
-		elasticsearchClient.sendBulk("", new HttpClient.OutputStreamHandler() {
-			@Override
-			public void withHttpURLConnection(OutputStream os) throws IOException {
-				os.write(("{ \"update\" : {\"_id\" : \"1\", \"_type\" : \"type1\", \"_index\" : \"index1\", \"_retry_on_conflict\" : 3} }\n" +
-						"{ \"doc\" : {\"field\" : \"value\"} }\n").getBytes("UTF-8"));
-			}
-		});
-		assertThat(testAppender.list).hasSize(1);
-		final ILoggingEvent event = testAppender.list.get(0);
-		assertThat(event.getLevel().toString()).isEqualTo("WARN");
-		assertThat(event.getMessage()).startsWith("Error(s) while sending a _bulk request to elasticsearch: {}");
+		for(ElasticsearchClient esclient : elasticsearchClients) {
+			esclient.sendBulk("", new HttpClient.OutputStreamHandler() {
+				@Override
+				public void withHttpURLConnection(OutputStream os) throws IOException {
+					os.write(("{ \"update\" : {\"_id\" : \"1\", \"_type\" : \"type1\", \"_index\" : \"index1\", \"_retry_on_conflict\" : 3} }\n" +
+							"{ \"doc\" : {\"field\" : \"value\"} }\n").getBytes("UTF-8"));
+				}
+			});
+			assertThat(testAppender.list).hasSize(1);
+			final ILoggingEvent event = testAppender.list.get(0);
+			assertThat(event.getLevel().toString()).isEqualTo("WARN");
+			assertThat(event.getMessage()).startsWith("Error(s) while sending a _bulk request to elasticsearch: {}");
+		}
 	}
 
 	@Test
 	public void testSuccessfulBulkRequest() {
-		elasticsearchClient.sendBulk("", new HttpClient.OutputStreamHandler() {
-			@Override
-			public void withHttpURLConnection(OutputStream os) throws IOException {
-				os.write(("{ \"index\" : { \"_index\" : \"test\", \"_type\" : \"type1\", \"_id\" : \"1\" } }\n" +
-						"{ \"field1\" : \"value1\" }\n").getBytes("UTF-8"));
-			}
-		});
-		assertThat(testAppender.list).hasSize(0);
+		for(ElasticsearchClient esclient : elasticsearchClients) {
+			esclient.sendBulk("", new HttpClient.OutputStreamHandler() {
+				@Override
+				public void withHttpURLConnection(OutputStream os) throws IOException {
+					os.write(("{ \"index\" : { \"_index\" : \"test\", \"_type\" : \"type1\", \"_id\" : \"1\" } }\n" +
+							"{ \"field1\" : \"value1\" }\n").getBytes("UTF-8"));
+				}
+			});
+			assertThat(testAppender.list).hasSize(0);
+		}
 	}
 
 }

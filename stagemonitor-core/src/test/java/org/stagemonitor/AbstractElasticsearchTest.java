@@ -1,5 +1,15 @@
 package org.stagemonitor;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
 import org.apache.commons.io.FileUtils;
 import org.elasticsearch.client.AdminClient;
 import org.elasticsearch.client.Client;
@@ -15,16 +25,6 @@ import org.slf4j.LoggerFactory;
 import org.stagemonitor.core.CorePlugin;
 import org.stagemonitor.core.Stagemonitor;
 import org.stagemonitor.core.elasticsearch.ElasticsearchClient;
-import org.stagemonitor.core.util.HttpClient;
-
-import java.io.File;
-import java.io.IOException;
-import java.net.ServerSocket;
-import java.util.Collection;
-import java.util.Collections;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class AbstractElasticsearchTest {
 
@@ -33,7 +33,7 @@ public class AbstractElasticsearchTest {
 	protected static Client client;
 	protected static AdminClient adminClient;
 	protected static int elasticsearchPort;
-	protected static ElasticsearchClient elasticsearchClient;
+	protected static List<ElasticsearchClient> elasticsearchClients;
 	protected static String elasticsearchUrl;
 	protected static CorePlugin corePlugin;
 
@@ -56,10 +56,10 @@ public class AbstractElasticsearchTest {
 					.build();
 			elasticsearchUrl = "http://localhost:" + elasticsearchPort;
 			AbstractElasticsearchTest.corePlugin = mock(CorePlugin.class);
-			when(corePlugin.getElasticsearchUrl()).thenReturn(elasticsearchUrl);
+//			when(corePlugin.getElasticsearchUrl()).thenReturn(elasticsearchUrl);
 			when(corePlugin.getElasticsearchUrls()).thenReturn(Collections.singletonList(elasticsearchUrl));
 			when(corePlugin.getThreadPoolQueueCapacityLimit()).thenReturn(1000);
-			elasticsearchClient = new ElasticsearchClient(corePlugin, new HttpClient(), -1);
+			elasticsearchClients = corePlugin.getElasticsearchClients();
 
 			node = new TestNode(settings, Collections.singletonList(Netty4Plugin.class));
 			node.start();

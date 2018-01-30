@@ -27,10 +27,10 @@ public class ElasticsearchClientAvailabilityCheckTest {
 	@Before
 	public void setUp() throws Exception {
 		final CorePlugin corePlugin = mock(CorePlugin.class);
-		when(corePlugin.getElasticsearchUrl()).thenReturn("http://localhost:41234");
+//		when(corePlugin.getElasticsearchUrl()).thenReturn("http://localhost:41234");
 		when(corePlugin.getElasticsearchUrls()).thenReturn(Collections.singletonList("http://localhost:41234"));
 		when(corePlugin.getThreadPoolQueueCapacityLimit()).thenReturn(10000);
-		elasticsearchClient = new ElasticsearchClient(corePlugin, new HttpClient(), 1);
+		elasticsearchClient = new ElasticsearchClient(corePlugin, new HttpClient(), 1, "http://localhost:41234");
 	}
 
 	@Test

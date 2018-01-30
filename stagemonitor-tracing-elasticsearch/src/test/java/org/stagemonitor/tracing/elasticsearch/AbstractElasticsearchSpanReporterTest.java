@@ -1,6 +1,14 @@
 package org.stagemonitor.tracing.elasticsearch;
 
-import com.uber.jaeger.context.TracingUtils;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -22,20 +30,14 @@ import org.stagemonitor.tracing.sampling.SamplePriorityDeterminingSpanEventListe
 import org.stagemonitor.tracing.utils.SpanUtils;
 import org.stagemonitor.tracing.wrapper.SpanWrappingTracer;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import com.uber.jaeger.context.TracingUtils;
 
 import io.opentracing.Span;
 import io.opentracing.Tracer;
 import io.opentracing.tag.Tags;
 
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 public class AbstractElasticsearchSpanReporterTest {
-	protected ElasticsearchClient elasticsearchClient;
+	protected List<ElasticsearchClient> elasticsearchClients;
 	protected TracingPlugin tracingPlugin;
 	protected ElasticsearchTracingPlugin elasticsearchTracingPlugin;
 	protected Logger spanLogger;
@@ -67,11 +69,12 @@ public class AbstractElasticsearchSpanReporterTest {
 		when(tracingPlugin.getOnlyReportSpansWithName()).thenReturn(Collections.singleton("Report Me"));
 		when(tracingPlugin.isProfilerActive()).thenReturn(true);
 		when(tracingPlugin.getProfilerRateLimitPerMinute()).thenReturn(1_000_000d);
-		when(corePlugin.getElasticsearchUrl()).thenReturn("http://localhost:9200");
 		when(corePlugin.getElasticsearchUrls()).thenReturn(Collections.singletonList("http://localhost:9200"));
-		when(corePlugin.getElasticsearchClient()).thenReturn(elasticsearchClient = mock(ElasticsearchClient.class));
+		when(corePlugin.getElasticsearchClients()).thenReturn(elasticsearchClients = mockESClients());
 		when(corePlugin.getThreadPoolQueueCapacityLimit()).thenReturn(1000);
-		when(elasticsearchClient.isElasticsearchAvailable()).thenReturn(true);
+		for(ElasticsearchClient esclient : elasticsearchClients) {
+			when(esclient.isElasticsearchAvailable()).thenReturn(true);
+		}
 		registry = new Metric2Registry();
 		when(corePlugin.getMetricRegistry()).thenReturn(registry);
 		spanLogger = mock(Logger.class);
@@ -88,6 +91,12 @@ public class AbstractElasticsearchSpanReporterTest {
 	@After
 	public void tearDown() throws Exception {
 		Assert.assertTrue(TracingUtils.getTraceContext().isEmpty());
+	}
+	
+	private List<ElasticsearchClient> mockESClients() {
+		List<ElasticsearchClient> clients = new ArrayList<>();
+		clients.add(mock(ElasticsearchClient.class));
+		return clients;
 	}
 
 	protected SpanContextInformation reportSpanWithCallTree(long executionTimeMs, String operationName) {

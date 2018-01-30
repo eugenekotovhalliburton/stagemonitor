@@ -37,7 +37,7 @@ public class ElasticsearchSpanReporterTest extends AbstractElasticsearchSpanRepo
 	public void testReportSpan() throws Exception {
 		final SpanContextInformation spanContext = reportSpanWithCallTree(1000, "Report Me");
 
-		Mockito.verify(elasticsearchClient).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
+		Mockito.verify(elasticsearchClients.get(0)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
 		Assert.assertTrue(reporter.isActive(spanContext));
 	}
 
@@ -46,7 +46,7 @@ public class ElasticsearchSpanReporterTest extends AbstractElasticsearchSpanRepo
 		Mockito.when(elasticsearchTracingPlugin.isOnlyLogElasticsearchSpanReports()).thenReturn(true);
 		final SpanContextInformation spanContext = reportSpanWithCallTree(1000, "Report Me");
 
-		Mockito.verify(elasticsearchClient, Mockito.times(0)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
+		Mockito.verify(elasticsearchClients.get(0), Mockito.times(0)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
 		Mockito.verify(spanLogger).info(ArgumentMatchers.startsWith("{\"index\":{\"_index\":\"stagemonitor-spans-" + StringUtils.getLogstashStyleDate() + "\",\"_type\":\"spans\"}}\n"));
 		Assert.assertTrue(reporter.isActive(spanContext));
 	}
@@ -69,7 +69,7 @@ public class ElasticsearchSpanReporterTest extends AbstractElasticsearchSpanRepo
 		reportSpanWithCallTree(250, "Report Me");
 
 		ArgumentCaptor<ReadbackSpan> spanCaptor = ArgumentCaptor.forClass(ReadbackSpan.class);
-		Mockito.verify(elasticsearchClient, Mockito.times(3)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), spanCaptor.capture());
+		Mockito.verify(elasticsearchClients.get(0), Mockito.times(3)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), spanCaptor.capture());
 		ReadbackSpan span = spanCaptor.getValue();
 		Assert.assertNull(span.getTags().get(SpanUtils.CALL_TREE_ASCII));
 		Assert.assertNull(span.getTags().get(SpanUtils.CALL_TREE_JSON));
@@ -84,7 +84,7 @@ public class ElasticsearchSpanReporterTest extends AbstractElasticsearchSpanRepo
 		reportSpanWithCallTree(1000, "Report Me");
 
 		ArgumentCaptor<ReadbackSpan> spanCaptor = ArgumentCaptor.forClass(ReadbackSpan.class);
-		Mockito.verify(elasticsearchClient, Mockito.times(3)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), spanCaptor.capture());
+		Mockito.verify(elasticsearchClients.get(0), Mockito.times(3)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), spanCaptor.capture());
 		verifyContainsCallTree(spanCaptor.getValue(), true);
 	}
 
@@ -114,7 +114,7 @@ public class ElasticsearchSpanReporterTest extends AbstractElasticsearchSpanRepo
 		reportSpanWithCallTree(250, "Report Me");
 		reportSpanWithCallTree(1000, "Report Me");
 
-		Mockito.verify(elasticsearchClient, Mockito.times(2)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.isA(ReadbackSpan.class));
+		Mockito.verify(elasticsearchClients.get(0), Mockito.times(2)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.isA(ReadbackSpan.class));
 	}
 
 	@Test
@@ -124,7 +124,7 @@ public class ElasticsearchSpanReporterTest extends AbstractElasticsearchSpanRepo
 		reportSpanWithCallTree(250, "Report Me");
 
 		ArgumentCaptor<ReadbackSpan> spanCaptor = ArgumentCaptor.forClass(ReadbackSpan.class);
-		Mockito.verify(elasticsearchClient).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), spanCaptor.capture());
+		Mockito.verify(elasticsearchClients.get(0)).index(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), spanCaptor.capture());
 		ReadbackSpan span = spanCaptor.getValue();
 		Assert.assertTrue((Boolean) span.getTags().get("serviceLoaderWorks"));
 	}
