@@ -49,6 +49,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class ElasticsearchClient {
 
+	private static final String SESSION_ID = StringUtils.formatSessionId(System.getProperty("user.name", "unknown_user") + '_' + System.currentTimeMillis());
+	private static final String EXEC_ENV_TIME_STAMP = StringUtils.timestampAsIsoString(System.currentTimeMillis());
+
 	public static final Map<String, String> CONTENT_TYPE_JSON = Collections.singletonMap("Content-Type", "application/json");
 	private final Logger logger = LoggerFactory.getLogger(ElasticsearchClient.class);
 	private final String TITLE = "title";
@@ -78,6 +81,32 @@ public class ElasticsearchClient {
 			timer.scheduleAtFixedRate(new CheckEsAvailability(httpClient, elasticSearchUrl), 0, period);
 		}
 		
+		sendExecEnvDetails();
+	}
+	
+	private void sendExecEnvDetails() {
+		
+		String spansIndex = "stagemonitor-spans-" + StringUtils.getLogstashStyleDate();
+		String envJsonString = getEnvJsonString();
+		logger.debug("Sending the following Execution Environment Data to URL " + getElasticSearchUrl() + ": " + envJsonString);
+		sendAsJsonAsync("POST", "/" + spansIndex + "/spans", envJsonString );
+	}
+	
+	private String getEnvJsonString() {
+		String cmdLineArgs = String.join(" ", ManagementFactory.getRuntimeMXBean().getInputArguments());
+		String envVars = getEnvironmentVariables();
+		String sessionId = System.getProperty("dsg.session.id", SESSION_ID);
+		String user = System.getProperty("user.name", "unknown_user");
+		return "{\"session_id\" : \"" + sessionId + "\", \"user\" : \"" + user + "\", \"command_line_args\" : \""
+				+ cmdLineArgs + "\", \"env_vars\" : \"" + envVars + "\", \"@timestamp\" : \"" + EXEC_ENV_TIME_STAMP
+				+ "\"}";
+
+	}
+
+	private String getEnvironmentVariables() {
+		StringBuilder sb = new StringBuilder();
+		System.getenv().forEach((k, v) -> sb.append("<<").append(k).append('=').append(v.replace('\\', '/')).append(">>"));
+		return sb.toString();
 	}
 
 	public JsonNode getJson(final String path) throws IOException {

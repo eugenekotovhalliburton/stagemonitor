@@ -1,11 +1,5 @@
 package org.stagemonitor.core.util;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.stagemonitor.util.IOUtils;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -22,6 +16,12 @@ import java.util.concurrent.TimeUnit;
 
 import javax.xml.bind.DatatypeConverter;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.stagemonitor.util.IOUtils;
+
+import com.fasterxml.jackson.databind.JsonNode;
+
 // TODO create HttpRequest POJO
 // method, url, headers, outputStreamHandler, responseHandler
 // builder methods logErrors(int... excludedStatusCodes)
@@ -31,8 +31,22 @@ public class HttpClient {
 	private static final long READ_TIMEOUT_SEC = 15;
 	private final Logger logger = LoggerFactory.getLogger(getClass());
 	
-	private Proxy proxy;
-	private boolean proxyLoaded;
+	private static Proxy proxy = null;
+	
+	//Fix for 434740 - Use another instance of proxy selector and have new proxy objects 
+	private static ProxySelector theProxySelector;
+
+    static {
+        try {
+            Class<?> c = Class.forName("sun.net.spi.DefaultProxySelector");
+            if (c != null && ProxySelector.class.isAssignableFrom(c)) {
+                theProxySelector = (ProxySelector) c.newInstance();
+            }
+        } catch (Exception e) {
+            theProxySelector = null;
+        }
+        detectProxy("https://abc.com"); //find the http(s) proxy for a dummy URL
+    }
 
 	public int send(final String method, final String url) {
 		return send(method, url, null, null);
@@ -94,7 +108,8 @@ public class HttpClient {
 			//set the default authenticator to null to avoid pop up for authentication
 			Authenticator.setDefault(null);
 			//get the default system proxy if one exists
-			connection = (HttpURLConnection) parsedUrl.openConnection(getProxy(url));
+//			connection = (HttpURLConnection) parsedUrl.openConnection(proxyLoaded ? proxy : getProxy(url));
+			connection = (HttpURLConnection) parsedUrl.openConnection(proxy);
 			if (parsedUrl.getUserInfo() != null) {
 //				System.out.println("USER_INFO: " + parsedUrl.getUserInfo());
 				basicAuth = "Basic " + DatatypeConverter.printBase64Binary(parsedUrl.getUserInfo().getBytes());
@@ -144,24 +159,31 @@ public class HttpClient {
 		}
 	}
 	
-	private Proxy getProxy(String url) {
-		if(!proxyLoaded && proxy == null) { //initially
+	private static void detectProxy(String url) {
+		Proxy pxy = null;
+		try {
 			try {
 	            System.setProperty("java.net.useSystemProxies","true");
-	            List<Proxy> prxies = ProxySelector.getDefault().select(
-	                        new URI(url));
+	            URI uri = new URI(url);
+				List<Proxy> prxies = theProxySelector != null ? theProxySelector.select(uri) : ProxySelector.getDefault().select(
+	                        uri);
 				// as per the java doc of ProxySelector.select() method, the
 				// list will contain one element even if there are no proxies.
 				// So the list will never be empty. we can directly get the
 				// first element
-	            proxy = prxies.get(0); //get the first one
+	            pxy = prxies.get(0); //get the first one
+				
 	        } catch (Exception e) {
-	            logger.error("Could not detect the system proxy. " + e.getMessage(), e);
-	            proxy = Proxy.NO_PROXY;
+	            pxy = Proxy.NO_PROXY;
 	        }
-			proxyLoaded = true;
+		} finally {
+			if(pxy.type() == Proxy.Type.DIRECT) {
+				proxy = Proxy.NO_PROXY;
+			} else {
+				proxy = new Proxy(pxy.type(), pxy.address()); 
+			}
 		}
-		return proxy;
+		
 	}
 
 

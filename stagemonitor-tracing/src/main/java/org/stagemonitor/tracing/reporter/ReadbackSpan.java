@@ -24,7 +24,7 @@ import io.opentracing.tag.Tags;
  */
 public class ReadbackSpan {
 	
-	private static final String SESSION_ID = format(System.getProperty("user.name", "unknown_user") + '_' + System.currentTimeMillis());
+	private static final String SESSION_ID = StringUtils.formatSessionId(System.getProperty("user.name", "unknown_user") + '_' + System.currentTimeMillis());
 
 	static {
 		JsonUtils.getMapper().registerModule(new SpanJsonModule());
@@ -233,21 +233,4 @@ public class ReadbackSpan {
 			return newPath;
 		}
 	}
-	
-	private static String format(String sessionId) {
-        int len = sessionId.length();
-        int i = 0;
-        StringBuilder sb = new StringBuilder(sessionId);
-        while (i < len) {
-            char ch = sb.charAt(i);
-            i++;
-            if (Character.isAlphabetic(ch) || Character.isDigit(ch)) {
-                continue;
-            } else if (ch == '_') {
-                continue;
-            }
-            sb.setCharAt(i - 1, '_');
-        }
-        return sb.toString();
-    }
 }

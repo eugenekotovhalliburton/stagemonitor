@@ -197,4 +197,21 @@ public class StringUtils {
 	public static String reDot(String s) {
 		return s.replace("_(dot)_", ".");
 	}
+	
+	public static String formatSessionId(String sessionId) {
+        int len = sessionId.length();
+        int i = 0;
+        StringBuilder sb = new StringBuilder(sessionId);
+        while (i < len) {
+            char ch = sb.charAt(i);
+            i++;
+            if (Character.isAlphabetic(ch) || Character.isDigit(ch)) {
+                continue;
+            } else if (ch == '_') {
+                continue;
+            }
+            sb.setCharAt(i - 1, '_');
+        }
+        return sb.toString();
+    }
 }
